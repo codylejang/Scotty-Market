@@ -5,6 +5,7 @@ export function getSpendingByCategory(
 ): Record<TransactionCategory, number> {
   const spending: Partial<Record<TransactionCategory, number>> = {};
   for (const tx of transactions) {
+    if (tx.isIncoming) continue; // Exclude income (e.g. paychecks)
     spending[tx.category] = (spending[tx.category] || 0) + tx.amount;
   }
   return spending as Record<TransactionCategory, number>;
@@ -15,13 +16,13 @@ export function getTotalSpending(transactions: Transaction[], days: number = 30)
   cutoff.setDate(cutoff.getDate() - days);
 
   return transactions
-    .filter((tx) => tx.date >= cutoff)
+    .filter((tx) => tx.date >= cutoff && !tx.isIncoming)
     .reduce((sum, tx) => sum + tx.amount, 0);
 }
 
 export function getSpendingSince(transactions: Transaction[], start: Date): number {
   return transactions
-    .filter((tx) => tx.date >= start)
+    .filter((tx) => tx.date >= start && !tx.isIncoming)
     .reduce((sum, tx) => sum + tx.amount, 0);
 }
 

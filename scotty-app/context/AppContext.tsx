@@ -362,7 +362,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const periodDays = b.frequency === 'Day' ? 1 : b.frequency === 'Week' ? 7 : 30;
           const periodStart = new Date(today);
           periodStart.setDate(periodStart.getDate() - periodDays);
-          const periodTxns = catTxns.filter(t => t.date >= periodStart);
+          const periodTxns = catTxns.filter(t => t.date >= periodStart && !t.isIncoming);
           const spent = periodTxns.reduce((sum, t) => sum + t.amount, 0);
           return { ...b, spent: Math.round(spent * 100) / 100 };
         });
