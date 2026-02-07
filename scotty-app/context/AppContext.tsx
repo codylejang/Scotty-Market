@@ -274,7 +274,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   async function initializeApp() {
     const isHealthy = await checkBackendHealth();
     if (!isHealthy) {
-      initializeFallbackState();
+      initializeFromMock();
       return;
     }
     setBackendConnected(true);
@@ -284,7 +284,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.warn('[AppContext] Backend upgrade failed, using fallback state:', err);
       setBackendConnected(false);
-      initializeFallbackState();
+      initializeFromMock();
     }
   }
 
