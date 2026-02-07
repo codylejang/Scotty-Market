@@ -262,4 +262,11 @@ export const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_chat_memory_user ON chat_memory(user_id, type);
     `,
   },
+  {
+    version: 6,
+    name: 'quest_description',
+    sql: `
+      ALTER TABLE quest ADD COLUMN description TEXT NOT NULL DEFAULT '';
+    `,
+  },
 ];
