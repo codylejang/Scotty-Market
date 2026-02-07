@@ -1,4 +1,5 @@
 import { Transaction, TransactionCategory, Achievement, UserProfile, Quest } from '../types';
+import seedSuite from '../data/nessie-seed-transactions.json';
 
 type SeedTransactionKind = 'purchase' | 'deposit' | 'withdrawal' | 'transfer';
 
