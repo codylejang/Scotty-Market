@@ -1,9 +1,9 @@
 import { Transaction, Achievement, ChatMessage, DailyInsight } from '../types';
 import { getSpendingByCategory, getTotalSpending } from './mockData';
+import { sendChatMessageAPI, fetchDailyPayload, mapInsightToFrontend, checkBackendHealth } from './api';
 
 // AI Service for Scotty
-// In production, these would call Claude/OpenAI APIs
-// For hackathon demo, we'll use realistic mock responses
+// Proxies through backend when available, falls back to local mock
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
@@ -103,11 +103,22 @@ async function callClaudeAPI(systemPrompt: string, userMessage: string): Promise
 }
 
 // Generate chat response from Scotty
+// Tries backend API first, then direct Claude API, then mock
 export async function generateChatResponse(
   userMessage: string,
   transactions: Transaction[],
   chatHistory: ChatMessage[]
 ): Promise<string> {
+  // Try backend API first
+  try {
+    const backendUp = await checkBackendHealth();
+    if (backendUp) {
+      return await sendChatMessageAPI(userMessage);
+    }
+  } catch {
+    // Fall through to other methods
+  }
+
   const context = formatTransactionsForAI(transactions);
 
   if (config.useRealAI && config.apiKey) {
@@ -252,7 +263,21 @@ function generateMockAchievements(transactions: Transaction[]): Achievement[] {
 }
 
 // Generate daily insight blurb
+// Tries backend API first, then direct Claude API, then mock
 export async function generateDailyInsight(transactions: Transaction[]): Promise<DailyInsight> {
+  // Try backend API first
+  try {
+    const backendUp = await checkBackendHealth();
+    if (backendUp) {
+      const payload = await fetchDailyPayload();
+      if (payload.insights.length > 0) {
+        return mapInsightToFrontend(payload.insights[0]);
+      }
+    }
+  } catch {
+    // Fall through to other methods
+  }
+
   const context = formatTransactionsForAI(transactions);
 
   if (config.useRealAI && config.apiKey) {
