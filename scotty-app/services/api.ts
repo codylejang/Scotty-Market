@@ -10,9 +10,75 @@ import {
 import { getTransactionHistory, resetAndSeedNessieDummyData } from './nessie';
 
 // Configure this to point to your backend
-const API_BASE_URL = __DEV__
-  ? 'http://localhost:3001/api'
-  : 'http://localhost:3001/api';
+// 
+// IMPORTANT: For Expo Go on physical devices, you MUST use your computer's IP address!
+// 
+// Set the IP via environment variable:
+//   EXPO_PUBLIC_API_HOST=192.168.1.100 npx expo start
+//
+// Or find your IP manually:
+//   Mac/Linux: ifconfig | grep "inet " | grep -v 127.0.0.1
+//   Windows: ipconfig (look for IPv4 Address)
+//
+// Make sure:
+// - Your phone and computer are on the same Wi-Fi network
+// - Your firewall allows connections on port 3001
+// - The backend server is running
+
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
+// Auto-detect the development server IP from Expo
+const getDevServerHost = (): string => {
+  // Check environment variable first (highest priority, works everywhere)
+  if (process.env.EXPO_PUBLIC_API_HOST) {
+    console.log(`[API] Using IP from EXPO_PUBLIC_API_HOST: ${process.env.EXPO_PUBLIC_API_HOST}`);
+    return process.env.EXPO_PUBLIC_API_HOST;
+  }
+
+  // For web platform, localhost works fine
+  if (Platform.OS === 'web') {
+    return 'localhost';
+  }
+
+  // For native (iOS/Android), try to get IP from Expo Constants
+  // This auto-detects the dev machine's LAN IP when running in Expo Go
+  const debuggerHost =
+    Constants.expoConfig?.hostUri ||
+    Constants.manifest2?.extra?.expoGo?.debuggerHost ||
+    (Constants.manifest as any)?.debuggerHost ||
+    (Constants.manifest as any)?.hostUri;
+
+  if (debuggerHost) {
+    // Extract IP from "192.168.1.100:8081" format
+    const cleanHost = debuggerHost.replace(/^exp:\/\//, '').replace(/^http:\/\//, '');
+    const ip = cleanHost.split(':')[0];
+    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+      console.log(`[API] Auto-detected dev server IP: ${ip}`);
+      return ip;
+    }
+  }
+
+  // Android emulator special IP
+  if (Platform.OS === 'android') {
+    console.log(`[API] Using Android emulator default: 10.0.2.2`);
+    return '10.0.2.2';
+  }
+
+  // iOS simulator can use localhost
+  return 'localhost';
+};
+
+const getApiBaseUrl = () => {
+  const host = getDevServerHost();
+  return `http://${host}:3001/api`;
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+if (__DEV__) {
+  console.log(`[API] Base URL: ${API_BASE_URL} (platform: ${Platform.OS})`);
+}
 
 // Default user for prototype (matches seed data)
 const DEFAULT_USER_ID = 'user_1';
@@ -58,6 +124,7 @@ function mapCategory(backendCategory: string | null): TransactionCategory {
 // ─── API Helpers ───
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
+
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -317,14 +384,19 @@ export function mapInsightToFrontend(
  */
 export async function checkBackendHealth(): Promise<boolean> {
   try {
+    const healthUrl = `${API_BASE_URL.replace('/api', '')}/health`;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const response = await fetch(`${API_BASE_URL.replace('/api', '')}/health`, {
-      signal: controller.signal,
-    });
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const response = await fetch(healthUrl, { signal: controller.signal });
     clearTimeout(timeout);
+    if (__DEV__) {
+      console.log(`[API] Health check: ${response.ok ? 'OK' : 'FAILED'} (${healthUrl})`);
+    }
     return response.ok;
-  } catch {
+  } catch (error: any) {
+    if (__DEV__) {
+      console.warn(`[API] Health check failed: ${error.message} (target: ${API_BASE_URL})`);
+    }
     return false;
   }
 }

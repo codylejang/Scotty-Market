@@ -17,7 +17,6 @@ import {
 import {
   calculateHealthMetrics,
   calculateScottyState,
-  calculateDailyCredits,
 } from '../services/healthScore';
 import { generateDailyInsight, generateChatResponse } from '../services/ai';
 import {
@@ -31,6 +30,17 @@ import {
   fetchActiveQuest,
   mapInsightToFrontend,
 } from '../services/api';
+
+/** Race a promise against a timeout. Rejects if the promise doesn't resolve in time. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms);
+    promise.then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
 
 interface AppState {
   // User data
@@ -93,61 +103,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
   ]);
 
-  // Initialize on mount - try backend first, fall back to mock
+  // Initialize on mount: show mock data immediately, then try backend in background
   useEffect(() => {
-    initializeFromBackend();
-  }, []);
-
-  async function initializeFromBackend() {
-    const isHealthy = await checkBackendHealth();
-    setBackendConnected(isHealthy);
-
-    if (isHealthy) {
-      try {
-        await loadFromBackend();
-        return; // Success - skip mock initialization
-      } catch (err) {
-        console.warn('Backend fetch failed, falling back to mock data:', err);
-        setBackendConnected(false);
-      }
-    }
-
-    // Fallback: use mock data
+    // Show something right away
     initializeFromMock();
-  }
-
-  async function loadFromBackend() {
-    // Fetch all data in parallel
-    const [txns, payload, metrics, scotty] = await Promise.all([
-      fetchTransactions(30),
-      fetchDailyPayload(),
-      fetchHealthMetrics(),
-      fetchScottyState(),
-    ]);
-
-    // Update transactions
-    if (txns.length > 0) {
-      setTransactions(txns);
-    }
-
-    // Update Scotty state from backend
-    setScottyState(scotty);
-    setHealthMetrics(metrics);
-
-    // Map insights
-    if (payload.insights.length > 0) {
-      setDailyInsight(mapInsightToFrontend(payload.insights[0]));
-    }
-
-    // Map active quest to achievement
-    const questAchievement = await fetchActiveQuest();
-    const mockAchievements = generateSampleAchievements(txns.length > 0 ? txns : transactions);
-    if (questAchievement) {
-      setAchievements([questAchievement, ...mockAchievements.slice(0, 2)]);
-    } else {
-      setAchievements(mockAchievements);
-    }
-  }
+    // Then try to upgrade to backend data (non-blocking)
+    tryBackendUpgrade();
+  }, []);
 
   function initializeFromMock() {
     const metrics = calculateHealthMetrics({
@@ -165,6 +127,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAchievements(newAchievements);
 
     generateDailyInsight(transactions).then(setDailyInsight);
+  }
+
+  async function tryBackendUpgrade() {
+    const isHealthy = await checkBackendHealth();
+    if (!isHealthy) return;
+    setBackendConnected(true);
+
+    // Fetch backend data with a global timeout so the app never hangs
+    try {
+      await withTimeout(loadFromBackend(), 15000);
+    } catch (err) {
+      console.warn('[AppContext] Backend upgrade failed, keeping mock data:', err);
+      setBackendConnected(false);
+    }
+  }
+
+  async function loadFromBackend() {
+    // Fetch non-blocking data first (fast endpoints)
+    const [txns, metrics, scotty] = await Promise.all([
+      fetchTransactions(30),
+      fetchHealthMetrics(),
+      fetchScottyState(),
+    ]);
+
+    if (txns.length > 0) setTransactions(txns);
+    setScottyState(scotty);
+    setHealthMetrics(metrics);
+
+    // Daily payload may trigger LLM on first run — fetch separately so it doesn't block above
+    try {
+      const payload = await withTimeout(fetchDailyPayload(), 10000);
+      if (payload.insights.length > 0) {
+        setDailyInsight(mapInsightToFrontend(payload.insights[0]));
+      }
+    } catch {
+      // Daily payload timed out (LLM generating) — keep mock insight, that's fine
+    }
+
+    // Quest -> achievement mapping
+    try {
+      const questAchievement = await fetchActiveQuest();
+      const baseAchievements = generateSampleAchievements(txns.length > 0 ? txns : transactions);
+      if (questAchievement) {
+        setAchievements([questAchievement, ...baseAchievements.slice(0, 2)]);
+      } else {
+        setAchievements(baseAchievements);
+      }
+    } catch {
+      // Keep existing achievements
+    }
   }
 
   // Feed Scotty
@@ -235,7 +247,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
           response = await sendChatMessageAPI(message);
         } catch {
-          // Fallback to local
           response = await generateChatResponse(message, transactions, chatMessages);
         }
       } else {
