@@ -1,12 +1,18 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import { TransactionCategory, Transaction } from '../types';
+import { TransactionCategory, Transaction, DailyInsight, Quest, AccountInfo } from '../types';
 
 interface SpendingChartProps {
   spending: Partial<Record<TransactionCategory, number>>;
   budget?: number;
   transactions?: Transaction[];
   balance?: number;
+  dailyInsight?: DailyInsight | null;
+  dailySpend?: number;
+  accounts?: AccountInfo[];
+  totalBalance?: number;
+  spendingTrend?: { months: string[]; totals: number[] };
+  quests?: Quest[];
 }
 
 const CATEGORY_COLORS: Record<TransactionCategory, string> = {
@@ -35,7 +41,18 @@ const CATEGORY_LABELS: Record<TransactionCategory, string> = {
   other: 'Other',
 };
 
-export function SpendingChart({ spending, budget, transactions = [], balance = 2410 }: SpendingChartProps) {
+export function SpendingChart({
+  spending,
+  budget,
+  transactions = [],
+  balance = 2410,
+  dailyInsight,
+  dailySpend: propDailySpend,
+  accounts = [],
+  totalBalance: propTotalBalance,
+  spendingTrend: propTrend,
+  quests = [],
+}: SpendingChartProps) {
   const entries = Object.entries(spending)
     .filter(([, amount]) => amount && amount > 0)
     .sort(([, a], [, b]) => (b || 0) - (a || 0)) as [TransactionCategory, number][];
@@ -44,30 +61,40 @@ export function SpendingChart({ spending, budget, transactions = [], balance = 2
   const topCategory = entries[0];
   const top3 = entries.slice(0, 3);
 
-  // Insight message
+  // Insight message — use agent-generated insight if available
   const insightCategory = topCategory ? CATEGORY_LABELS[topCategory[0]] : 'spending';
-  const insightMessage = `"Yo! Your dining spending is up 12% this week. Your savings goals are waiting for you!"`;
+  const insightMessage = dailyInsight?.message
+    ? `"${dailyInsight.message}"`
+    : `"Yo! Your top spending is ${insightCategory}. Your savings goals are waiting for you!"`;
 
-  // Generate last 6 months
+  // 6-month trend: use backend data if available, fallback to generated labels
   const now = new Date();
-  const months = Array.from({ length: 6 }, (_, i) => {
+  const fallbackMonths = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(now);
     d.setMonth(d.getMonth() - (5 - i));
     return d.toLocaleString('en-US', { month: 'short' });
   });
-  const savingsData = [320, 280, 410, 350, 390, 450];
-  const maxSavings = Math.max(...savingsData);
+  const months = propTrend && propTrend.months.length > 0 ? propTrend.months : fallbackMonths;
+  const savingsData = propTrend && propTrend.totals.length > 0 ? propTrend.totals : [0, 0, 0, 0, 0, 0];
+  const maxSavings = Math.max(...savingsData, 1);
   
   // Current month/year for donut subtitle
   const currentMonthYear = now.toLocaleString('en-US', { month: 'short', year: 'numeric' }).toUpperCase();
 
-  // Daily spend
-  const dailySpend = transactions.length > 0
-    ? transactions.filter(t => {
-        const now = new Date();
-        return t.date.toDateString() === now.toDateString();
-      }).reduce((s, t) => s + t.amount, 0)
-    : 42.5;
+  // Daily spend — use prop from AppContext if available
+  const dailySpend = propDailySpend !== undefined && propDailySpend > 0
+    ? propDailySpend
+    : transactions.length > 0
+      ? transactions.filter(t => {
+          const now = new Date();
+          return t.date.toDateString() === now.toDateString();
+        }).reduce((s, t) => s + t.amount, 0)
+      : 0;
+
+  // Use real total balance
+  const effectiveBalance = (propTotalBalance !== undefined && propTotalBalance > 0)
+    ? propTotalBalance
+    : balance;
 
   return (
     <View style={styles.container}>
@@ -94,20 +121,26 @@ export function SpendingChart({ spending, budget, transactions = [], balance = 2
 
       <View style={styles.balanceRow}>
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>MAIN SAVINGS</Text>
-          <Text style={styles.balanceAmount}>${(balance * 3.5).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</Text>
+          <Text style={styles.balanceLabel}>TOTAL BALANCE</Text>
+          <Text style={styles.balanceAmount}>
+            ${effectiveBalance.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+          </Text>
           <View style={styles.balanceChipRow}>
-            <View style={[styles.balanceChip, { backgroundColor: '#c8e6c9' }]}>
-              <Text style={styles.balanceChipText}>My 💰</Text>
-            </View>
-            <View style={[styles.balanceChip, { backgroundColor: '#bbdefb' }]}>
-              <Text style={styles.balanceChipText}>🏦</Text>
-            </View>
+            {accounts.slice(0, 2).map((acct, i) => (
+              <View key={acct.id} style={[styles.balanceChip, { backgroundColor: i === 0 ? '#c8e6c9' : '#bbdefb' }]}>
+                <Text style={styles.balanceChipText}>{acct.nickname || acct.type}</Text>
+              </View>
+            ))}
+            {accounts.length === 0 && (
+              <View style={[styles.balanceChip, { backgroundColor: '#c8e6c9' }]}>
+                <Text style={styles.balanceChipText}>My 💰</Text>
+              </View>
+            )}
           </View>
         </View>
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>DAILY SPENDING</Text>
-          <Text style={styles.balanceAmount}>${balance > 1000 ? '1,250' : balance.toFixed(0)}</Text>
+          <Text style={styles.balanceLabel}>TODAY'S SPENDING</Text>
+          <Text style={styles.balanceAmount}>${dailySpend.toFixed(0)}</Text>
           <View style={styles.balanceChipRow}>
             <View style={[styles.balanceChip, { backgroundColor: '#ffece6' }]}>
               <Text style={styles.balanceChipText}>Card 💳</Text>
@@ -119,12 +152,16 @@ export function SpendingChart({ spending, budget, transactions = [], balance = 2
       <View style={styles.balanceRowSmall}>
         <View style={styles.balanceCardSmall}>
           <Text style={styles.balanceLabelSmall}>SPENDABLE MONEY</Text>
-          <Text style={styles.balanceAmountSmall}>${(dailySpend * 10).toFixed(0)}</Text>
+          <Text style={styles.balanceAmountSmall}>
+            ${Math.max(0, effectiveBalance - dailySpend * 30).toFixed(0)}
+          </Text>
           <Text style={styles.balanceSubtext}>Left til end of month</Text>
         </View>
         <View style={styles.balanceCardSmall}>
-          <Text style={styles.balanceLabelSmall}>CREDIT CARD</Text>
-          <Text style={styles.balanceAmountSmall}>${(Math.round(balance * 0.15)).toFixed(0)}</Text>
+          <Text style={styles.balanceLabelSmall}>{accounts.length > 1 ? accounts[1].nickname?.toUpperCase() || 'ACCOUNT 2' : 'CREDIT CARD'}</Text>
+          <Text style={styles.balanceAmountSmall}>
+            ${accounts.length > 1 ? accounts[1].balance.toFixed(0) : '0'}
+          </Text>
           <Text style={styles.balanceSubtext}>Due soon</Text>
         </View>
       </View>
@@ -227,23 +264,46 @@ export function SpendingChart({ spending, budget, transactions = [], balance = 2
         <Text style={styles.sectionTitle}>Goal Progress</Text>
       </View>
 
-      <View style={styles.goalCard}>
-        <View style={styles.goalHeader}>
-          <Text style={styles.goalTitle}>LAPTOP FUND</Text>
-          <View style={styles.goalStar}>
-            <Text>⭐</Text>
+      {(() => {
+        const activeQuest = quests.find(q => q.goal > 0);
+        if (activeQuest) {
+          const pct = Math.min(100, Math.round((activeQuest.progress / activeQuest.goal) * 100));
+          return (
+            <View style={styles.goalCard}>
+              <View style={styles.goalHeader}>
+                <Text style={styles.goalTitle}>{activeQuest.title.toUpperCase()}</Text>
+                <View style={styles.goalStar}>
+                  <Text>{activeQuest.emoji || '⭐'}</Text>
+                </View>
+              </View>
+              <Text style={styles.goalAmount}>
+                <Text style={styles.goalAmountBold}>${activeQuest.progress.toFixed(0)}</Text> / ${activeQuest.goal.toFixed(0)}
+              </Text>
+              <Text style={styles.goalExpected}>{activeQuest.goalTarget || 'IN PROGRESS'}</Text>
+              <View style={styles.goalProgressBar}>
+                <View style={[styles.goalProgressFill, { width: `${pct}%` }]} />
+                {pct < 100 && <View style={styles.goalProgressDashed} />}
+              </View>
+              <Text style={styles.goalEncouragement}>
+                {pct}% OF THE WAY THERE, KEEP GOING! 🐾
+              </Text>
+            </View>
+          );
+        }
+        return (
+          <View style={styles.goalCard}>
+            <View style={styles.goalHeader}>
+              <Text style={styles.goalTitle}>NO ACTIVE GOAL</Text>
+              <View style={styles.goalStar}>
+                <Text>🎯</Text>
+              </View>
+            </View>
+            <Text style={styles.goalEncouragement}>
+              COMPLETE QUESTS TO START A NEW GOAL! 🐾
+            </Text>
           </View>
-        </View>
-        <Text style={styles.goalAmount}>
-          <Text style={styles.goalAmountBold}>${(balance * 0.5).toFixed(0)}</Text> / ${(balance * 0.83).toFixed(0)}
-        </Text>
-        <Text style={styles.goalExpected}>EXPECTED: {new Date(now.getFullYear(), now.getMonth() + 3, 15).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()}</Text>
-        <View style={styles.goalProgressBar}>
-          <View style={[styles.goalProgressFill, { width: '60%' }]} />
-          <View style={styles.goalProgressDashed} />
-        </View>
-        <Text style={styles.goalEncouragement}>60% OF THE WAY THERE, KEEP GOING! 🐾</Text>
-      </View>
+        );
+      })()}
     </View>
   );
 }

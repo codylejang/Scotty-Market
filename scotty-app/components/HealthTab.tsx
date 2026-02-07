@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,28 +7,56 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { HealthMetrics } from '../types';
+import { UpcomingBillsData } from '../services/api';
 import AnimatedProgressBar from './AnimatedProgressBar';
 
 interface HealthTabProps {
   healthMetrics: HealthMetrics;
   onStartGoal: () => void;
   onCreateBudget: () => void;
+  upcomingBills?: UpcomingBillsData | null;
+  dailyInsight?: { message: string } | null;
 }
 
-const CALENDAR_DAYS = [
-  [null, null, null, null, null, 1, 2],
-  [3, 4, 5, 6, 7, 8, 9],
-  [10, 11, 12, 13, 14, 15, 16],
-  [17, 18, 19, 20, 21, 22, 23],
-  [24, 25, 26, 27, 28, 29, 30],
-];
+function buildCalendar(): { weeks: (number | null)[][]; monthLabel: string; today: number } {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const today = now.getDate();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthLabel = now.toLocaleString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
 
-const BILL_DAYS = [5, 12, 21]; // Days with bills due
-const TODAY = 7;
+  const weeks: (number | null)[][] = [];
+  let week: (number | null)[] = new Array(firstDay).fill(null);
 
-export default function HealthTab({ healthMetrics, onStartGoal, onCreateBudget }: HealthTabProps) {
+  for (let d = 1; d <= daysInMonth; d++) {
+    week.push(d);
+    if (week.length === 7) {
+      weeks.push(week);
+      week = [];
+    }
+  }
+  if (week.length > 0) {
+    while (week.length < 7) week.push(null);
+    weeks.push(week);
+  }
+
+  return { weeks, monthLabel, today };
+}
+
+export default function HealthTab({ healthMetrics, onStartGoal, onCreateBudget, upcomingBills, dailyInsight }: HealthTabProps) {
   const healthGrade = healthMetrics.overallScore >= 80 ? 'A' : healthMetrics.overallScore >= 60 ? 'B' : 'C';
   const healthPct = `${healthMetrics.overallScore}%`;
+
+  const calendar = useMemo(() => buildCalendar(), []);
+  const billDays = upcomingBills?.bill_days ?? [];
+  const dueToday = upcomingBills?.due_today ?? [];
+
+  // Computed metrics
+  const debtRatio = healthMetrics.savingsRate > 0 ? Math.max(0, 100 - healthMetrics.savingsRate) : 15;
+  const consistencyScore = Math.round((healthMetrics.budgetAdherence + healthMetrics.impulseScore) / 2);
+  const consistencyLabel = consistencyScore >= 80 ? 'High' : consistencyScore >= 50 ? 'Medium' : 'Low';
 
   return (
     <View style={styles.container}>
@@ -42,7 +70,7 @@ export default function HealthTab({ healthMetrics, onStartGoal, onCreateBudget }
             I say your health is <Text style={styles.speechBold}>{healthPct}!</Text>
           </Text>
           <Text style={styles.speechSub}>
-            KEEP THOSE DIGITS MOVING, HUMAN! YOU'RE CRUSHING IT!
+            {dailyInsight?.message || "KEEP THOSE DIGITS MOVING, HUMAN! YOU'RE CRUSHING IT!"}
           </Text>
         </View>
       </View>
@@ -55,7 +83,7 @@ export default function HealthTab({ healthMetrics, onStartGoal, onCreateBudget }
 
       <View style={styles.calendarCard}>
         <View style={styles.calendarHeader}>
-          <Text style={styles.calendarMonth}>OCTOBER 2023</Text>
+          <Text style={styles.calendarMonth}>{calendar.monthLabel}</Text>
           <View style={styles.calendarNav}>
             <Text style={styles.calendarNavText}>◀ ▶</Text>
           </View>
@@ -71,25 +99,25 @@ export default function HealthTab({ healthMetrics, onStartGoal, onCreateBudget }
         </View>
 
         {/* Calendar grid */}
-        {CALENDAR_DAYS.map((week, wi) => (
+        {calendar.weeks.map((week, wi) => (
           <View key={wi} style={styles.calendarRow}>
             {week.map((day, di) => {
-              const isBill = day !== null && BILL_DAYS.includes(day);
-              const isToday = day === TODAY;
+              const isBill = day !== null && billDays.includes(day);
+              const isToday = day === calendar.today;
               return (
                 <View
                   key={di}
                   style={[
                     styles.calendarCell,
                     isToday && styles.calendarCellToday,
-                    isBill && styles.calendarCellBill,
+                    isBill && !isToday && styles.calendarCellBill,
                   ]}
                 >
                   <Text
                     style={[
                       styles.calendarDayText,
                       isToday && styles.calendarDayToday,
-                      isBill && styles.calendarDayBill,
+                      isBill && !isToday && styles.calendarDayBill,
                     ]}
                   >
                     {day ?? ''}
@@ -104,20 +132,25 @@ export default function HealthTab({ healthMetrics, onStartGoal, onCreateBudget }
         <View style={styles.dueTodaySection}>
           <Text style={styles.dueTodayLabel}>DUE TODAY</Text>
           <View style={styles.dueChipRow}>
-            <View style={[styles.dueChip, { backgroundColor: '#ff6b6b' }]}>
-              <Text style={styles.dueChipIcon}>🎬</Text>
-              <View>
-                <Text style={styles.dueChipName}>CINEMA+</Text>
-                <Text style={styles.dueChipAmount}>$4.99</Text>
+            {dueToday.length > 0 ? (
+              dueToday.slice(0, 2).map((bill, i) => (
+                <View key={i} style={[styles.dueChip, { backgroundColor: i === 0 ? '#ff6b6b' : '#e1bee7' }]}>
+                  <Text style={styles.dueChipIcon}>{i === 0 ? '💳' : '📋'}</Text>
+                  <View>
+                    <Text style={styles.dueChipName}>{(bill.merchant_key || 'Bill').toUpperCase()}</Text>
+                    <Text style={styles.dueChipAmount}>${bill.typical_amount?.toFixed(2) ?? '0.00'}</Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={[styles.dueChip, { backgroundColor: '#c8e6c9' }]}>
+                <Text style={styles.dueChipIcon}>✅</Text>
+                <View>
+                  <Text style={styles.dueChipName}>NONE DUE</Text>
+                  <Text style={styles.dueChipAmount}>All clear!</Text>
+                </View>
               </View>
-            </View>
-            <View style={[styles.dueChip, { backgroundColor: '#e1bee7' }]}>
-              <Text style={styles.dueChipIcon}>🎵</Text>
-              <View>
-                <Text style={styles.dueChipName}>MUSIC</Text>
-                <Text style={styles.dueChipAmount}>$1.99</Text>
-              </View>
-            </View>
+            )}
           </View>
         </View>
       </View>
@@ -147,8 +180,8 @@ export default function HealthTab({ healthMetrics, onStartGoal, onCreateBudget }
         </View>
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>DEBT RATIO</Text>
-          <Text style={styles.metricValue}>15%</Text>
-          <Text style={styles.metricSubtext}>MANAGEABLE, HUMAN</Text>
+          <Text style={styles.metricValue}>{debtRatio}%</Text>
+          <Text style={styles.metricSubtext}>{debtRatio < 30 ? 'MANAGEABLE, HUMAN' : 'WATCH OUT!'}</Text>
         </View>
       </View>
 
@@ -169,11 +202,11 @@ export default function HealthTab({ healthMetrics, onStartGoal, onCreateBudget }
         </View>
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>CONSISTENCY</Text>
-          <Text style={styles.metricValueWord}>High</Text>
-          <Text style={styles.metricSubtext}>GOOD FLOW!</Text>
+          <Text style={styles.metricValueWord}>{consistencyLabel}</Text>
+          <Text style={styles.metricSubtext}>{consistencyScore >= 70 ? 'GOOD FLOW!' : 'KEEP AT IT!'}</Text>
           <View style={styles.metricBarWrapper}>
             <AnimatedProgressBar
-              targetPercent={85}
+              targetPercent={consistencyScore}
               color="#4caf50"
               delay={600}
               height={6}

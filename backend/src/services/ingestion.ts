@@ -89,7 +89,7 @@ export function getTransactions(
   userId: string,
   start: string,
   end: string,
-  options: { includePending?: boolean; category?: string; merchant?: string } = {}
+  options: { includePending?: boolean; category?: string; merchant?: string; merchant_key?: string } = {}
 ): Transaction[] {
   const db = getDb();
   let sql = `SELECT * FROM transaction_ WHERE user_id = ? AND date >= ? AND date <= ?`;
@@ -102,7 +102,10 @@ export function getTransactions(
     sql += ` AND category_primary = ?`;
     params.push(options.category);
   }
-  if (options.merchant) {
+  if (options.merchant_key) {
+    sql += ` AND LOWER(merchant_key) = LOWER(?)`;
+    params.push(options.merchant_key);
+  } else if (options.merchant) {
     sql += ` AND merchant_name = ?`;
     params.push(options.merchant);
   }

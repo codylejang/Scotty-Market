@@ -409,52 +409,115 @@ export async function checkBackendHealth(): Promise<boolean> {
   }
 }
 
-/**
- * Fetch daily quests for the user.
- * These quests are personalized based on user's goals and spending patterns.
- */
-export async function fetchDailyQuests(userId: string = DEFAULT_USER_ID): Promise<Quest[]> {
-  try {
-    const quests = await apiFetch<Quest[]>(`/users/${userId}/quests`);
-    return quests;
-  } catch (error) {
-    console.log('Failed to fetch quests from API:', error);
-    // Return empty array on failure - component will use local mock data
-    throw error;
-  }
+// ─── Backend quest shape ───
+interface BackendQuest {
+  id: string;
+  title: string;
+  status: string;
+  metric_type: string;
+  metric_params: Record<string, any>;
+  reward_food_type: string;
+  happiness_delta: number;
+  window_start: string;
+  window_end: string;
+  confirmed_value: number;
+  pending_value: number;
+  explanation: string;
+}
+
+const QUEST_EMOJI: Record<string, string> = {
+  'CATEGORY_SPEND_CAP': '🍖',
+  'MERCHANT_SPEND_CAP': '☕',
+  'NO_MERCHANT_CHARGE': '🚫',
+  'TRANSFER_AMOUNT': '💰',
+};
+
+const QUEST_COLORS = ['#ffb3ba', '#fff9c4', '#c8e6c9', '#bbdefb', '#e1bee7'];
+
+function mapBackendQuest(q: BackendQuest, index: number): Quest {
+  const cap = q.metric_params?.cap || q.metric_params?.target_amount || 0;
+  return {
+    id: q.id,
+    title: q.title,
+    subtitle: q.reward_food_type || 'Quest',
+    emoji: QUEST_EMOJI[q.metric_type] || '🎯',
+    xpReward: q.happiness_delta * 5,
+    progress: Math.round(q.confirmed_value * 100) / 100,
+    goal: cap,
+    progressUnit: q.metric_type === 'NO_MERCHANT_CHARGE' ? 'charges' : 'spent',
+    bgColor: QUEST_COLORS[index % QUEST_COLORS.length],
+    goalTarget: q.explanation || undefined,
+  };
 }
 
 /**
- * Update quest progress.
+ * Fetch daily quests for the user.
  */
-export async function updateQuestProgress(
-  questId: string,
-  progress: number,
-  userId: string = DEFAULT_USER_ID
-): Promise<Quest> {
-  try {
-    const quest = await apiFetch<Quest>(`/users/${userId}/quests/${questId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ progress }),
-    });
-    return quest;
-  } catch (error) {
-    console.error('Failed to update quest progress:', error);
-    throw error;
-  }
+export async function fetchDailyQuests(userId: string = DEFAULT_USER_ID): Promise<Quest[]> {
+  const quests = await apiFetch<BackendQuest[]>(`/v1/quests/list?user_id=${userId}`);
+  return quests.map(mapBackendQuest);
 }
 
 /**
  * Refresh/generate new daily quests.
  */
 export async function refreshDailyQuests(userId: string = DEFAULT_USER_ID): Promise<Quest[]> {
-  try {
-    const quests = await apiFetch<Quest[]>(`/users/${userId}/quests/refresh`, {
-      method: 'POST',
-    });
-    return quests;
-  } catch (error) {
-    console.error('Failed to refresh quests:', error);
-    throw error;
-  }
+  const quests = await apiFetch<BackendQuest[]>('/v1/quests/refresh', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+  });
+  return quests.map(mapBackendQuest);
+}
+
+// ─── Spending Trend API ───
+
+export async function fetchSpendingTrend(): Promise<{ months: string[]; totals: number[] }> {
+  const data = await apiFetch<{ trend: Array<{ month: string; total: number }> }>(
+    `/v1/finance/spending-trend?user_id=${DEFAULT_USER_ID}`
+  );
+  return {
+    months: data.trend.map(t => t.month),
+    totals: data.trend.map(t => t.total),
+  };
+}
+
+// ─── Upcoming Bills API ───
+
+export interface UpcomingBillsData {
+  subscriptions: Array<{
+    merchant_key: string;
+    typical_amount: number;
+    next_expected_date: string;
+    cadence: string;
+  }>;
+  bill_days: number[];
+  due_today: Array<{
+    merchant_key: string;
+    typical_amount: number;
+    next_expected_date: string;
+  }>;
+}
+
+export async function fetchUpcomingBills(): Promise<UpcomingBillsData> {
+  return apiFetch<UpcomingBillsData>(
+    `/v1/subscriptions/upcoming?user_id=${DEFAULT_USER_ID}`
+  );
+}
+
+// ─── Create Budget API ───
+
+export async function createBudget(
+  category: string,
+  limitAmount: number,
+  frequency: 'Day' | 'Week' | 'Month' = 'Month'
+): Promise<any> {
+  return apiFetch('/v1/budget', {
+    method: 'POST',
+    body: JSON.stringify({
+      user_id: DEFAULT_USER_ID,
+      category,
+      limit_amount: limitAmount,
+      frequency,
+    }),
+  });
 }

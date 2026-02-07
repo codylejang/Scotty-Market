@@ -10,7 +10,9 @@ import {
   ScrollView,
   Switch,
   KeyboardAvoidingView,
+  Alert,
 } from 'react-native';
+import { createBudget } from '../services/api';
 
 interface BudgetBuilderModalProps {
   visible: boolean;
@@ -34,11 +36,38 @@ export default function BudgetBuilderModal({ visible, onClose }: BudgetBuilderMo
   const [monthlyLimit, setMonthlyLimit] = useState('400');
   const [adaptiveMode, setAdaptiveMode] = useState(true);
 
+  const [submitting, setSubmitting] = useState(false);
   const suggestedBudget = 400;
 
-  const handleSubmit = () => {
-    // TODO: integrate with AppContext
-    onClose();
+  const CATEGORY_TO_BACKEND: Record<BudgetCategory, string> = {
+    groceries: 'Groceries',
+    dining: 'Food & Drink',
+    travel: 'Transportation',
+    shopping: 'Shopping',
+    fun: 'Entertainment',
+    self_care: 'Health',
+    miscellaneous: 'Subscription',
+  };
+
+  const handleSubmit = async () => {
+    const amount = parseFloat(monthlyLimit);
+    if (!amount || amount <= 0) {
+      Alert.alert('Invalid amount', 'Please enter a valid budget amount.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const backendCategory = CATEGORY_TO_BACKEND[selectedCategory] || 'Other';
+      await createBudget(backendCategory, amount, 'Month');
+      onClose();
+    } catch (err: any) {
+      // If backend fails, still close (graceful degradation)
+      console.warn('Budget creation failed:', err.message);
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

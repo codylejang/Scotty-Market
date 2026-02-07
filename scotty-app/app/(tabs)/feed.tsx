@@ -29,7 +29,18 @@ const TABS: { key: TabType; label: string }[] = [
 
 export default function FeedScreen() {
   const navigation = useNavigation();
-  const { transactions, profile, healthMetrics } = useApp();
+  const {
+    transactions,
+    profile,
+    healthMetrics,
+    dailyInsight,
+    dailySpend,
+    accounts,
+    totalBalance,
+    spendingTrend,
+    quests,
+    upcomingBills,
+  } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
@@ -128,6 +139,12 @@ export default function FeedScreen() {
             budget={profile.monthlyBudget}
             transactions={transactions}
             balance={profile.currentBalance}
+            dailyInsight={dailyInsight}
+            dailySpend={dailySpend}
+            accounts={accounts}
+            totalBalance={totalBalance}
+            spendingTrend={spendingTrend}
+            quests={quests}
           />
         </ScrollView>
 
@@ -140,6 +157,8 @@ export default function FeedScreen() {
             healthMetrics={healthMetrics}
             onStartGoal={() => setShowGoalModal(true)}
             onCreateBudget={() => setShowBudgetModal(true)}
+            upcomingBills={upcomingBills}
+            dailyInsight={dailyInsight}
           />
         </ScrollView>
       </ScrollView>

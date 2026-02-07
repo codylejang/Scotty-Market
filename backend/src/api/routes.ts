@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { Orchestrator } from '../orchestrator';
 import { AgentRunner } from '../agents/runner';
 import { Adapters } from '../adapters';
-import { evaluateQuest } from '../services/quest-evaluation';
+import { evaluateQuest, evaluateUserQuests } from '../services/quest-evaluation';
 import { getUpcomingSubscriptions, detectRecurringCandidates } from '../services/subscription-analysis';
 import { computeHealthMetrics } from '../services/health-metrics';
 import { searchTransactions, getTransactionById, listTransactionStats, detectAnomalies } from '../services/retrieval';
@@ -510,7 +510,139 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
 
       const daysAhead = parseInt(req.query.days_ahead as string || '30');
       const subs = getUpcomingSubscriptions(userId, daysAhead);
-      res.json(subs);
+
+      const today = new Date().toISOString().split('T')[0];
+      const billDays = subs
+        .filter((s): s is typeof s & { next_expected_date: string } => !!s.next_expected_date)
+        .map(s => new Date(s.next_expected_date).getDate());
+      const dueToday = subs.filter(s => s.next_expected_date === today);
+
+      res.json({
+        subscriptions: subs,
+        bill_days: [...new Set(billDays)],
+        due_today: dueToday,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /v1/quests/list ───
+  router.get('/v1/quests/list', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.user_id as string;
+      if (!userId) return res.status(400).json({ error: 'user_id required' });
+
+      const db = getDb();
+      const quests = db.prepare(
+        `SELECT * FROM quest WHERE user_id = ? ORDER BY created_at DESC`
+      ).all(userId) as any[];
+
+      const mapped = quests.map((q: any) => {
+        const params = JSON.parse(q.metric_params || '{}');
+        // Get latest progress snapshot
+        const snapshot = db.prepare(
+          `SELECT * FROM quest_progress_snapshot WHERE quest_id = ? ORDER BY created_at DESC LIMIT 1`
+        ).get(q.id) as any;
+
+        return {
+          id: q.id,
+          title: q.title,
+          status: q.status,
+          metric_type: q.metric_type,
+          metric_params: params,
+          reward_food_type: q.reward_food_type,
+          happiness_delta: q.happiness_delta,
+          window_start: q.window_start,
+          window_end: q.window_end,
+          confirmed_value: snapshot?.confirmed_value ?? 0,
+          pending_value: snapshot?.pending_value ?? 0,
+          explanation: snapshot?.explanation ?? '',
+        };
+      });
+
+      res.json(mapped);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── POST /v1/quests/refresh ───
+  router.post('/v1/quests/refresh', async (req: Request, res: Response) => {
+    try {
+      const userId = (req.body?.user_id as string) || (req.query.user_id as string);
+      if (!userId) return res.status(400).json({ error: 'user_id required' });
+
+      // Trigger daily digest which generates new quests
+      const result = await orchestrator.runDailyDigest(userId);
+
+      // Re-evaluate active quests
+      evaluateUserQuests(userId);
+
+      // Return updated quest list
+      const db = getDb();
+      const quests = db.prepare(
+        `SELECT * FROM quest WHERE user_id = ? ORDER BY created_at DESC`
+      ).all(userId) as any[];
+
+      const mapped = quests.map((q: any) => {
+        const params = JSON.parse(q.metric_params || '{}');
+        const snapshot = db.prepare(
+          `SELECT * FROM quest_progress_snapshot WHERE quest_id = ? ORDER BY created_at DESC LIMIT 1`
+        ).get(q.id) as any;
+
+        return {
+          id: q.id,
+          title: q.title,
+          status: q.status,
+          metric_type: q.metric_type,
+          metric_params: params,
+          reward_food_type: q.reward_food_type,
+          happiness_delta: q.happiness_delta,
+          window_start: q.window_start,
+          window_end: q.window_end,
+          confirmed_value: snapshot?.confirmed_value ?? 0,
+          pending_value: snapshot?.pending_value ?? 0,
+          explanation: snapshot?.explanation ?? '',
+        };
+      });
+
+      res.json(mapped);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /v1/finance/spending-trend ───
+  router.get('/v1/finance/spending-trend', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.user_id as string || 'user_1';
+      const months = parseInt(req.query.months as string || '6');
+
+      const db = getDb();
+      const now = new Date();
+      const result: { month: string; total: number }[] = [];
+
+      for (let i = months - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const start = d.toISOString().split('T')[0];
+        const endDate = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        const end = endDate.toISOString().split('T')[0];
+        const monthLabel = d.toLocaleString('en-US', { month: 'short' });
+
+        const row = db.prepare(`
+          SELECT COALESCE(SUM(ABS(amount)), 0) as total
+          FROM transaction_
+          WHERE user_id = ? AND date >= ? AND date <= ? AND amount < 0 AND pending = 0
+        `).get(userId, start, end) as any;
+
+        result.push({
+          month: monthLabel,
+          total: Math.round((row?.total || 0) * 100) / 100,
+        });
+      }
+
+      res.json({ trend: result });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
