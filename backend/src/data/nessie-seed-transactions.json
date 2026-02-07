@@ -5,55 +5,55 @@
       "account": "primary_checking",
       "date": "2025-11-15",
       "amount": 2650,
-      "description": "Income - Paycheck Direct Deposit"
+      "description": "Income - Direct Deposit Paycheck"
     },
     {
       "kind": "deposit",
       "account": "primary_checking",
       "date": "2025-11-29",
       "amount": 2650,
-      "description": "Income - Paycheck Direct Deposit"
+      "description": "Income - Direct Deposit Paycheck"
     },
     {
       "kind": "deposit",
       "account": "primary_checking",
       "date": "2025-12-13",
       "amount": 2725,
-      "description": "Income - Paycheck Direct Deposit"
+      "description": "Income - Direct Deposit Paycheck"
     },
     {
       "kind": "deposit",
       "account": "primary_checking",
       "date": "2025-12-27",
       "amount": 2725,
-      "description": "Income - Paycheck Direct Deposit"
+      "description": "Income - Direct Deposit Paycheck"
     },
     {
       "kind": "deposit",
       "account": "primary_checking",
       "date": "2026-01-10",
       "amount": 2780,
-      "description": "Income - Paycheck Direct Deposit"
+      "description": "Income - Direct Deposit Paycheck"
     },
     {
       "kind": "deposit",
       "account": "primary_checking",
       "date": "2026-01-24",
       "amount": 2780,
-      "description": "Income - Paycheck Direct Deposit"
+      "description": "Income - Direct Deposit Paycheck"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-11-10",
       "amount": 5.75,
-      "description": "Dining - Starbucks"
+      "description": "Dining - Starbucks Coffee"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2025-11-10",
-      "amount": 89.34,
+      "date": "2025-11-11",
+      "amount": 87.43,
       "description": "Groceries - Trader Joe's"
     },
     {
@@ -61,140 +61,126 @@
       "account": "primary_checking",
       "date": "2025-11-11",
       "amount": 15.99,
-      "description": "Subscription - Netflix"
+      "description": "Subscription - Netflix Monthly"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2025-11-11",
+      "date": "2025-11-12",
       "amount": 12.5,
       "description": "Dining - Chipotle"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2025-11-12",
-      "amount": 6.25,
-      "description": "Dining - Local Coffee Co"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
       "date": "2025-11-13",
-      "amount": 14.8,
-      "description": "Travel - Uber"
+      "amount": 6.25,
+      "description": "Dining - Dunkin' Donuts"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-11-14",
+      "amount": 29.99,
+      "description": "Subscription - Planet Fitness Membership"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2025-11-15",
+      "amount": 42.18,
+      "description": "Dining - Olive Garden"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2025-11-16",
+      "amount": 105.67,
+      "description": "Groceries - Whole Foods Market"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2025-11-16",
+      "amount": 18.99,
+      "description": "Travel - Uber Ride"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2025-11-17",
+      "amount": 4.5,
+      "description": "Dining - Local Coffee Shop"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2025-11-18",
       "amount": 10.99,
       "description": "Subscription - Spotify Premium"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2025-11-15",
-      "amount": 32.45,
+      "date": "2025-11-19",
+      "amount": 67.89,
+      "description": "Shopping - Target"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2025-11-20",
+      "amount": 28.45,
       "description": "Dining - Panera Bread"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2025-11-16",
-      "amount": 67.89,
-      "description": "Groceries - Whole Foods"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-11-16",
-      "amount": 42,
-      "description": "Fun - AMC Theatres"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-11-17",
-      "amount": 28.5,
-      "description": "Dining - Pizza Hut"
+      "date": "2025-11-21",
+      "amount": 14.75,
+      "description": "Travel - Lyft Ride"
     },
     {
       "kind": "transfer",
       "account": "primary_checking",
-      "date": "2025-11-17",
+      "date": "2025-11-22",
       "amount": 350,
       "description": "Transfer - To Savings Account"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2025-11-18",
-      "amount": 5.5,
-      "description": "Dining - Dunkin Donuts"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-11-19",
-      "amount": 29.99,
-      "description": "Subscription - Planet Fitness"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-11-20",
-      "amount": 18.99,
-      "description": "Travel - Lyft"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-11-21",
-      "amount": 156.78,
-      "description": "Shopping - Amazon"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-11-22",
-      "amount": 95.2,
+      "date": "2025-11-23",
+      "amount": 92.34,
       "description": "Groceries - Safeway"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-11-23",
-      "amount": 44.6,
-      "description": "Dining - Olive Garden"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-11-23",
-      "amount": 22.5,
-      "description": "Fun - Bowling Alley"
+      "amount": 38.5,
+      "description": "Dining - Thai Restaurant"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-11-24",
-      "amount": 6.45,
-      "description": "Dining - Starbucks"
+      "amount": 6.1,
+      "description": "Dining - Starbucks Coffee"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-11-25",
-      "amount": 78.9,
-      "description": "Shopping - Target"
+      "amount": 189.99,
+      "description": "Shopping - Nike Store"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-11-26",
-      "amount": 11.25,
-      "description": "Travel - Uber"
+      "amount": 45.23,
+      "description": "Shopping - Amazon"
     },
     {
       "kind": "purchase",
@@ -207,610 +193,561 @@
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-11-28",
-      "amount": 189.99,
-      "description": "Shopping - Best Buy Electronics"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-11-29",
-      "amount": 52.3,
+      "amount": 76.5,
       "description": "Groceries - Kroger"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2025-11-30",
-      "amount": 38.75,
-      "description": "Dining - Red Robin"
+      "date": "2025-11-29",
+      "amount": 24.99,
+      "description": "Dining - Five Guys"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-11-30",
-      "amount": 15,
-      "description": "Travel - Lyft"
+      "amount": 52,
+      "description": "Fun - Movie Theater and Snacks"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-01",
-      "amount": 5.85,
-      "description": "Dining - Local Coffee Co"
+      "amount": 5.45,
+      "description": "Dining - Dunkin' Donuts"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-02",
-      "amount": 73.45,
-      "description": "Groceries - Whole Foods"
+      "amount": 98.12,
+      "description": "Groceries - Trader Joe's"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-03",
-      "amount": 14.5,
+      "amount": 16.3,
       "description": "Dining - Subway"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-04",
-      "amount": 225,
-      "description": "Shopping - Nike Store"
+      "amount": 11.25,
+      "description": "Travel - Uber Ride"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-05",
-      "amount": 19.99,
-      "description": "Fun - Spotify Concert Tickets"
+      "amount": 42.88,
+      "description": "Shopping - H&M"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-06",
-      "amount": 108.5,
-      "description": "Groceries - Costco"
+      "amount": 125,
+      "description": "Shopping - Best Buy Electronics"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-07",
-      "amount": 42.8,
-      "description": "Dining - Texas Roadhouse"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-07",
-      "amount": 28,
-      "description": "Fun - Escape Room"
+      "amount": 31.75,
+      "description": "Dining - Sushi Restaurant"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-08",
       "amount": 6.75,
-      "description": "Dining - Dunkin Donuts"
+      "description": "Dining - Starbucks Coffee"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-09",
-      "amount": 11.5,
-      "description": "Travel - Uber"
+      "amount": 83.45,
+      "description": "Groceries - Whole Foods Market"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-10",
-      "amount": 15.99,
-      "description": "Subscription - Netflix"
+      "amount": 19.99,
+      "description": "Shopping - Amazon Prime"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-11",
-      "amount": 64.2,
-      "description": "Shopping - Amazon"
+      "amount": 15.99,
+      "description": "Subscription - Netflix Monthly"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-12",
-      "amount": 10.99,
-      "description": "Subscription - Spotify Premium"
+      "amount": 45.6,
+      "description": "Dining - Restaurant with Friends"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-13",
-      "amount": 87.65,
-      "description": "Groceries - Trader Joe's"
+      "amount": 22.5,
+      "description": "Travel - Lyft Ride"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-14",
-      "amount": 35.9,
-      "description": "Dining - Cheesecake Factory"
+      "amount": 29.99,
+      "description": "Subscription - Planet Fitness Membership"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-14",
-      "amount": 125,
-      "description": "Shopping - Holiday Gifts Mall"
+      "amount": 110.25,
+      "description": "Groceries - Costco"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-15",
-      "amount": 5.5,
-      "description": "Dining - Starbucks"
-    },
-    {
-      "kind": "transfer",
-      "account": "primary_checking",
-      "date": "2025-12-15",
-      "amount": 400,
-      "description": "Transfer - To Savings Account"
+      "amount": 65,
+      "description": "Shopping - Holiday Gift"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-16",
-      "amount": 78.5,
-      "description": "Shopping - Holiday Gifts Target"
+      "amount": 4.95,
+      "description": "Dining - Local Coffee Shop"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-17",
-      "amount": 16.75,
-      "description": "Travel - Lyft"
+      "amount": 78.5,
+      "description": "Shopping - Holiday Gift"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2025-12-18",
-      "amount": 29.99,
-      "description": "Subscription - Planet Fitness"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-19",
-      "amount": 92.3,
-      "description": "Groceries - Whole Foods"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-20",
-      "amount": 45.6,
-      "description": "Dining - Applebees"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-21",
-      "amount": 165,
-      "description": "Shopping - Holiday Gifts Amazon"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-21",
-      "amount": 18.25,
-      "description": "Dining - Five Guys"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-22",
-      "amount": 6.25,
-      "description": "Dining - Local Coffee Co"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-23",
-      "amount": 112.8,
-      "description": "Groceries - Safeway Holiday Shopping"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-24",
-      "amount": 58.9,
-      "description": "Dining - Holiday Dinner Restaurant"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-25",
-      "amount": 24.5,
-      "description": "Travel - Uber"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-26",
-      "amount": 2.99,
-      "description": "Subscription - iCloud Storage"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-27",
-      "amount": 89.99,
-      "description": "Shopping - Post-Holiday Sale"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-28",
-      "amount": 41.2,
-      "description": "Dining - Outback Steakhouse"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-28",
-      "amount": 35,
-      "description": "Fun - Movie Night Snacks"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-29",
-      "amount": 5.95,
-      "description": "Dining - Starbucks"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-30",
-      "amount": 76.45,
-      "description": "Groceries - Trader Joe's"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2025-12-31",
-      "amount": 85,
-      "description": "Fun - New Years Eve Party"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-01",
-      "amount": 13.5,
-      "description": "Dining - Brunch Cafe"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-02",
-      "amount": 54.3,
-      "description": "Groceries - Whole Foods"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-03",
-      "amount": 6.5,
-      "description": "Dining - Dunkin Donuts"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-04",
-      "amount": 289.99,
-      "description": "Shopping - Textbooks Campus Store"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-05",
-      "amount": 12.75,
-      "description": "Travel - Uber"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-06",
-      "amount": 28.4,
-      "description": "Dining - Panera Bread"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-07",
-      "amount": 15.99,
-      "description": "Subscription - Netflix"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-08",
       "amount": 10.99,
       "description": "Subscription - Spotify Premium"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-09",
-      "amount": 68.9,
-      "description": "Groceries - Kroger"
+      "date": "2025-12-19",
+      "amount": 54.3,
+      "description": "Dining - Italian Restaurant"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-10",
-      "amount": 36.75,
+      "date": "2025-12-20",
+      "amount": 89.99,
+      "description": "Shopping - Holiday Gifts Target"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2025-12-21",
+      "amount": 35.75,
+      "description": "Shopping - Amazon"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2025-12-21",
+      "amount": 95.6,
+      "description": "Groceries - Safeway"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2025-12-22",
+      "amount": 18.4,
       "description": "Dining - Chipotle"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-11",
-      "amount": 5.75,
-      "description": "Dining - Starbucks"
+      "date": "2025-12-23",
+      "amount": 125,
+      "description": "Shopping - Holiday Gift Electronics"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-11",
-      "amount": 48.5,
-      "description": "Shopping - Target"
+      "date": "2025-12-24",
+      "amount": 67.89,
+      "description": "Groceries - Whole Foods Market"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-12",
-      "amount": 19.8,
-      "description": "Travel - Lyft"
+      "date": "2025-12-25",
+      "amount": 42,
+      "description": "Dining - Holiday Brunch"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-13",
-      "amount": 29.99,
-      "description": "Subscription - Planet Fitness"
+      "date": "2025-12-26",
+      "amount": 6.5,
+      "description": "Dining - Starbucks Coffee"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-14",
-      "amount": 82.15,
-      "description": "Groceries - Whole Foods"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-15",
-      "amount": 44.2,
-      "description": "Dining - Buffalo Wild Wings"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-16",
-      "amount": 6.25,
-      "description": "Dining - Local Coffee Co"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-17",
-      "amount": 127.5,
-      "description": "Shopping - Amazon Electronics"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-18",
-      "amount": 39.9,
-      "description": "Dining - Sushi Restaurant"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-18",
-      "amount": 22,
-      "description": "Fun - Arcade"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-19",
-      "amount": 5.5,
-      "description": "Dining - Starbucks"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-20",
-      "amount": 95.4,
-      "description": "Groceries - Trader Joe's"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-21",
-      "amount": 14.25,
-      "description": "Travel - Uber"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-22",
+      "date": "2025-12-27",
       "amount": 2.99,
       "description": "Subscription - iCloud Storage"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-23",
-      "amount": 31.8,
-      "description": "Dining - Jersey Mike's"
+      "date": "2025-12-28",
+      "amount": 156.78,
+      "description": "Shopping - Post-Holiday Sale Macy's"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-24",
-      "amount": 67.25,
-      "description": "Self-Care - Haircut & Style"
+      "date": "2025-12-29",
+      "amount": 38.25,
+      "description": "Dining - Brunch with Friends"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-25",
-      "amount": 6.75,
-      "description": "Dining - Dunkin Donuts"
+      "date": "2025-12-30",
+      "amount": 14.99,
+      "description": "Travel - Uber Ride"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-25",
-      "amount": 103.6,
-      "description": "Groceries - Safeway"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-26",
-      "amount": 42.9,
-      "description": "Dining - Pizza Place"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-01-26",
-      "amount": 18.5,
-      "description": "Travel - Lyft"
+      "date": "2025-12-31",
+      "amount": 75,
+      "description": "Fun - New Year's Eve Dinner"
     },
     {
       "kind": "transfer",
       "account": "primary_checking",
-      "date": "2026-01-27",
+      "date": "2026-01-02",
       "amount": 500,
       "description": "Transfer - To Savings Account"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-28",
+      "date": "2026-01-02",
+      "amount": 82.34,
+      "description": "Groceries - Trader Joe's"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-03",
       "amount": 5.85,
-      "description": "Dining - Starbucks"
+      "description": "Dining - Dunkin' Donuts"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-29",
-      "amount": 72.3,
-      "description": "Shopping - H&M"
+      "date": "2026-01-04",
+      "amount": 249.99,
+      "description": "Shopping - Textbook Campus Bookstore"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-30",
-      "amount": 38.5,
-      "description": "Dining - Chili's"
+      "date": "2026-01-05",
+      "amount": 15.5,
+      "description": "Dining - Panera Bread"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-01-31",
-      "amount": 88.75,
-      "description": "Groceries - Whole Foods"
+      "date": "2026-01-06",
+      "amount": 12.75,
+      "description": "Travel - Lyft Ride"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-02-01",
-      "amount": 6.5,
-      "description": "Dining - Local Coffee Co"
+      "date": "2026-01-07",
+      "amount": 91.23,
+      "description": "Groceries - Whole Foods Market"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-02-01",
-      "amount": 45,
-      "description": "Fun - Concert Tickets"
+      "date": "2026-01-08",
+      "amount": 29.99,
+      "description": "Self-Care - Haircut"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-02-02",
-      "amount": 13.25,
-      "description": "Travel - Uber"
+      "date": "2026-01-09",
+      "amount": 6.25,
+      "description": "Dining - Starbucks Coffee"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-02-03",
+      "date": "2026-01-10",
+      "amount": 44.88,
+      "description": "Dining - Mexican Restaurant"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-11",
       "amount": 15.99,
-      "description": "Subscription - Netflix"
+      "description": "Subscription - Netflix Monthly"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-02-04",
+      "date": "2026-01-11",
+      "amount": 58.9,
+      "description": "Shopping - Amazon"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-12",
+      "amount": 4.75,
+      "description": "Dining - Local Coffee Shop"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-13",
+      "amount": 73.45,
+      "description": "Groceries - Safeway"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-14",
+      "amount": 29.99,
+      "description": "Subscription - Planet Fitness Membership"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-15",
+      "amount": 22.5,
+      "description": "Dining - Chipotle"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-16",
+      "amount": 16.8,
+      "description": "Travel - Uber Ride"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-17",
+      "amount": 112.34,
+      "description": "Groceries - Costco"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-17",
+      "amount": 38.99,
+      "description": "Dining - Dinner with Friends"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-18",
       "amount": 10.99,
       "description": "Subscription - Spotify Premium"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-02-04",
-      "amount": 59.8,
+      "date": "2026-01-19",
+      "amount": 6.5,
+      "description": "Dining - Dunkin' Donuts"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-20",
+      "amount": 145,
+      "description": "Shopping - Nordstrom Rack"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-21",
+      "amount": 28.75,
+      "description": "Dining - Poke Bowl Restaurant"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-22",
+      "amount": 85.6,
       "description": "Groceries - Trader Joe's"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
-      "date": "2026-02-05",
+      "date": "2026-01-23",
+      "amount": 19.25,
+      "description": "Travel - Lyft Ride"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-24",
       "amount": 5.95,
-      "description": "Dining - Starbucks"
+      "description": "Dining - Starbucks Coffee"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-25",
+      "amount": 62.4,
+      "description": "Shopping - Target"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-25",
+      "amount": 42,
+      "description": "Dining - Pizza Night"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-26",
+      "amount": 13.5,
+      "description": "Dining - Subway"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-27",
+      "amount": 2.99,
+      "description": "Subscription - iCloud Storage"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-27",
+      "amount": 94.78,
+      "description": "Groceries - Whole Foods Market"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-28",
+      "amount": 35.6,
+      "description": "Dining - Thai Food"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-29",
+      "amount": 4.5,
+      "description": "Dining - Local Coffee Shop"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-30",
+      "amount": 78.99,
+      "description": "Shopping - Amazon Electronics"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-01-31",
+      "amount": 24.85,
+      "description": "Dining - Five Guys"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-02-01",
+      "amount": 88.34,
+      "description": "Groceries - Kroger"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-02-01",
+      "amount": 55,
+      "description": "Fun - Concert Ticket"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-02-02",
+      "amount": 6.25,
+      "description": "Dining - Starbucks Coffee"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-02-03",
+      "amount": 17.5,
+      "description": "Travel - Uber Ride"
+    },
+    {
+      "kind": "purchase",
+      "account": "primary_checking",
+      "date": "2026-02-04",
+      "amount": 31.25,
+      "description": "Dining - Burger Restaurant"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2026-02-05",
-      "amount": 27.4,
-      "description": "Dining - Taco Bell"
+      "amount": 102.45,
+      "description": "Groceries - Whole Foods Market"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2026-02-06",
-      "amount": 29.99,
-      "description": "Subscription - Planet Fitness"
+      "amount": 45,
+      "description": "Self-Care - Spa Treatment"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2026-02-06",
-      "amount": 84.5,
-      "description": "Shopping - Amazon"
+      "amount": 28.9,
+      "description": "Dining - Sushi Restaurant"
     },
     {
       "kind": "purchase",
       "account": "primary_checking",
       "date": "2026-02-07",
-      "amount": 6.25,
-      "description": "Dining - Dunkin Donuts"
-    },
-    {
-      "kind": "purchase",
-      "account": "primary_checking",
-      "date": "2026-02-07",
-      "amount": 43.75,
-      "description": "Groceries - Kroger"
+      "amount": 5.5,
+      "description": "Dining - Dunkin' Donuts"
     }
   ]
 }
