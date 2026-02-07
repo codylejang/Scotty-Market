@@ -1,5 +1,5 @@
 import { Transaction, HealthMetrics, MoodState, ScottyState } from '../types';
-import { getTotalSpending, getSpendingByCategory } from './mockData';
+import { getTotalSpending } from './transactionMetrics';
 
 const IMPULSE_MERCHANTS = ['DoorDash', 'Uber Eats', 'Amazon', 'Shein', 'Steam'];
 const IMPULSE_THRESHOLD = 5; // More than 5 impulse purchases is concerning

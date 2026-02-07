@@ -10,18 +10,15 @@ import {
   FoodType,
   BudgetItem,
   AccountInfo,
+  TransactionCategory,
   Quest,
 } from '../types';
-import {
-  generateTransactionHistory,
-  generateUserProfile,
-  generateSampleAchievements,
-} from '../services/mockData';
 import {
   calculateHealthMetrics,
   calculateScottyState,
 } from '../services/healthScore';
 import { generateDailyInsight, generateChatResponse } from '../services/ai';
+import { getSpendingByCategory } from '../services/transactionMetrics';
 import {
   checkBackendHealth,
   fetchDailyPayload,
@@ -102,14 +99,51 @@ const defaultHealthMetrics: HealthMetrics = {
   overallScore: 65,
 };
 
+const defaultProfile: UserProfile = {
+  monthlyBudget: 1500,
+  monthlySavingsGoal: 300,
+  currentBalance: 2400,
+};
+
 const AppContext = createContext<AppState | null>(null);
 
+function buildLocalAchievements(transactions: Transaction[]): Achievement[] {
+  const spending = getSpendingByCategory(transactions);
+  const topCategory = Object.entries(spending)
+    .filter(([, amount]) => amount > 0)
+    .sort(([, a], [, b]) => b - a)[0];
+
+  const achievements: Achievement[] = [];
+  if (topCategory) {
+    const [category, amount] = topCategory;
+    achievements.push({
+      id: `top_cat_${Date.now()}`,
+      title: `Reduce ${category.replace('_', ' ')} spending`,
+      description: `You spent $${amount.toFixed(0)} on ${category.replace('_', ' ')} recently. Try cutting back by 20%.`,
+      targetAmount: Math.round(amount * 0.8),
+      currentAmount: amount,
+      completed: false,
+      category: category as TransactionCategory,
+      aiGenerated: true,
+    });
+  }
+
+  achievements.push({
+    id: `weekend_${Date.now()}`,
+    title: 'Weekend Saver',
+    description: 'Keep weekend spending under $50 for entertainment and dining.',
+    targetAmount: 50,
+    currentAmount: 0,
+    completed: false,
+    aiGenerated: true,
+  });
+
+  return achievements;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  // Initialize with mock data (used as fallback)
-  const [profile] = useState<UserProfile>(() => generateUserProfile());
-  const [transactions, setTransactions] = useState<Transaction[]>(() =>
-    generateTransactionHistory(30, 3)
-  );
+  const [profile] = useState<UserProfile>(defaultProfile);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [scottyState, setScottyState] = useState<ScottyState>(defaultScottyState);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics>(defaultHealthMetrics);
@@ -151,7 +185,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const scotty = calculateScottyState(metrics, null, 10);
     setScottyState(scotty);
 
-    const newAchievements = generateSampleAchievements(transactions);
+    const newAchievements = buildLocalAchievements(transactions);
     setAchievements(newAchievements);
 
     generateDailyInsight(transactions).then(setDailyInsight);
@@ -251,7 +285,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Quest -> achievement mapping
     try {
       const questAchievement = await fetchActiveQuest();
-      const baseAchievements = generateSampleAchievements(txns.length > 0 ? txns : transactions);
+      const baseAchievements = buildLocalAchievements(txns.length > 0 ? txns : transactions);
       if (questAchievement) {
         setAchievements([questAchievement, ...baseAchievements.slice(0, 2)]);
       } else {

@@ -102,11 +102,9 @@ export class DedalusProvider implements LLMProvider {
     schema?: z.ZodSchema,
     models?: string[]
   ): Promise<string> {
-    // Default to Haiku (cheapest) if not specified
-    // Dedalus model format: anthropic/claude-{model}-{version}
-    // Based on docs example: anthropic/claude-opus-4-6
-    // Try standard Anthropic model names
-    const modelList = models || ['anthropic/claude-3-haiku-20240307'];
+    // Default to newer Dedalus-supported Anthropic models if not specified.
+    // Dedalus model format example: anthropic/claude-sonnet-4-5
+    const modelList = models || ['anthropic/claude-sonnet-4-5', 'anthropic/claude-3-5-sonnet-20241022'];
     // Use first model for now (Dedalus may have issues with arrays)
     const model = Array.isArray(modelList) ? modelList[0] : modelList;
 
@@ -248,9 +246,8 @@ export class AgentRunner {
 
     const contextPrompt = buildDailyContextPrompt(summary7d, summary30d, budgets, activeQuest, recurring);
 
-    // Use Sonnet (cost-effective, good quality) with Haiku fallback
-    // Dedalus model format: anthropic/claude-{model}-{version}
-    const modelList = models || ['anthropic/claude-3-5-sonnet-20241022', 'anthropic/claude-3-haiku-20240307'];
+    // Use newer Dedalus Anthropic models while avoiding high-cost Opus defaults.
+    const modelList = models || ['anthropic/claude-sonnet-4-5', 'anthropic/claude-3-5-sonnet-20241022'];
 
     let output: DailyDigestOutput;
 
@@ -327,8 +324,7 @@ ${retrievalContext ? `\nTransaction search results:\n${retrievalContext.text}` :
 Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise and grounded in the data above.${retrievalContext ? ' Reference specific transaction details when answering.' : ''}`;
 
     // Use Haiku (cheapest, fastest) for chat with Sonnet fallback
-    // Dedalus model format: anthropic/claude-{model}-{version}
-    const modelList = models || ['anthropic/claude-3-haiku-20240307', 'anthropic/claude-3-5-sonnet-20241022'];
+    const modelList = models || ['anthropic/claude-sonnet-4-5', 'anthropic/claude-3-5-sonnet-20241022'];
 
     let output: ChatResponseOutput;
     let rawOutput: string | null = null;
@@ -691,4 +687,3 @@ Financial Data:
 
 Today: ${new Date().toISOString().split('T')[0]}`;
 }
-

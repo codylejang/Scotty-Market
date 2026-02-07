@@ -176,13 +176,6 @@ export async function fetchTransactions(days: number = 30): Promise<Transaction[
   return data.map(mapTransaction);
 }
 
-export async function seedNessieSandboxData() {
-  return apiFetch<{ customerIds: string[]; accountIds: string[]; transactionsCreated: number }>(
-    '/v1/admin/nessie/seed',
-    { method: 'POST' }
-  );
-}
-
 export interface DailyPayload {
   insights: Array<{
     id: string;

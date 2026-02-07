@@ -22,7 +22,6 @@ import HeartBurst from './HeartBurst';
 import ScottyQuestsModal from './ScottyQuestsModal';
 import { Scotty, ScottyRef } from './Scotty';
 import { useApp } from '../context/AppContext';
-import { generateDailyQuests } from '../services/mockData';
 import { fetchDailyQuests, refreshDailyQuests } from '../services/api';
 import { BudgetItem, Quest } from '../types';
 
@@ -112,8 +111,7 @@ export default function ScottyHomeScreen({
       const newQuests = await refreshDailyQuests();
       setQuests(newQuests);
     } catch (error) {
-      // Fallback to generating new mock data
-      setQuests(generateDailyQuests());
+      console.log('Failed to refresh quests');
     }
   }, []);
 

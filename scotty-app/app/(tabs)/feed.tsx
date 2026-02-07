@@ -17,7 +17,7 @@ import SpendingChart from '@/components/SpendingChart';
 import HealthTab from '@/components/HealthTab';
 import GoalWorkshopModal from '@/components/GoalWorkshopModal';
 import BudgetBuilderModal from '@/components/BudgetBuilderModal';
-import { getSpendingByCategory, getTotalSpending } from '@/services/mockData';
+import { getSpendingByCategory, getTotalSpending } from '@/services/transactionMetrics';
 
 type TabType = 'transactions' | 'analytics' | 'health';
 
