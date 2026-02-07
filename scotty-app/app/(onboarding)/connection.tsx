@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Scotty from '@/components/Scotty';
-import { seedNessieDemo } from '@/services/api';
+import { seedNessieDemo, fetchTransactions, runFullSeed } from '@/services/api';
 import { Colors, Shadows } from '@/constants/Theme';
 import { useApp } from '@/context/AppContext';
 
@@ -14,6 +14,7 @@ export default function ConnectionScreen() {
   const router = useRouter();
   const { resetTutorial } = useApp();
   const [isSeeding, setIsSeeding] = useState(false);
+  const [isReseeding, setIsReseeding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleConnect = () => {
@@ -24,11 +25,16 @@ export default function ConnectionScreen() {
   };
 
   const handleDemoMode = async () => {
-    if (isSeeding) return;
+    if (isSeeding || isReseeding) return;
     setIsSeeding(true);
     setError(null);
     try {
-      await seedNessieDemo();
+      // Check if seed data already exists
+      const existing = await fetchTransactions(30).catch(() => []);
+      if (existing.length === 0) {
+        // No seed found — create one
+        await seedNessieDemo();
+      }
       resetTutorial();
       router.replace('/(tabs)');
     } catch (err) {
@@ -36,6 +42,22 @@ export default function ConnectionScreen() {
       setError(message);
     } finally {
       setIsSeeding(false);
+    }
+  };
+
+  const handleReseed = async () => {
+    if (isSeeding || isReseeding) return;
+    setIsReseeding(true);
+    setError(null);
+    try {
+      await runFullSeed();
+      resetTutorial();
+      router.replace('/(tabs)');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Reseed failed.';
+      setError(message);
+    } finally {
+      setIsReseeding(false);
     }
   };
 
@@ -73,12 +95,21 @@ export default function ConnectionScreen() {
               <Text style={styles.primaryButtonText}>Connect Bank Account</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.secondaryButton, isSeeding && styles.buttonDisabled]}
+              style={[styles.secondaryButton, (isSeeding || isReseeding) && styles.buttonDisabled]}
               onPress={handleDemoMode}
               activeOpacity={0.85}
             >
               <Text style={styles.secondaryButtonText}>
-                {isSeeding ? 'Seeding Demo Data...' : 'Demo Mode (Instant)'}
+                {isSeeding ? 'Loading Demo...' : 'Demo Mode (Instant)'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.reseedButton, (isSeeding || isReseeding) && styles.buttonDisabled]}
+              onPress={handleReseed}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.reseedButtonText}>
+                {isReseeding ? 'Reseeding...' : 'Reseed Demo Data'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -208,5 +239,19 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.7,
+  },
+  reseedButton: {
+    borderWidth: 2,
+    borderColor: Colors.textMuted,
+    borderRadius: 14,
+    borderStyle: 'dashed',
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  reseedButtonText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 12,
+    color: Colors.textMuted,
   },
 });

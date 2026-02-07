@@ -8,6 +8,7 @@ import { computeHealthMetrics } from '../services/health-metrics';
 import { searchTransactions, getTransactionById, listTransactionStats, detectAnomalies, DetectAnomaliesInput } from '../services/retrieval';
 import { buildDualSummary } from '../services/financial-summary';
 import { resetAndSeedNessieDummyData, getTransactionHistory, inferNessieCategory } from '../services/nessie';
+import { runFullSeed } from '../db/seed';
 import { listBudgets, createBudget, updateBudget, validateBudgetInput, BudgetFrequency } from '../services/budget';
 import { getDb } from '../db/database';
 import { TransactionSchema } from '../schemas';
@@ -232,11 +233,12 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
       }
 
       if (state.food_credits < cost) {
-        return res.status(400).json({ error: 'Not enough food credits', food_credits: state.food_credits });
+        // Allow feeding but clamp credits to 0 (frontend manages food inventory)
+        console.warn(`[feed] User ${user_id} has ${state.food_credits} credits but needs ${cost}, clamping to 0`);
       }
 
       const newHappiness = Math.min(100, state.happiness + happinessBoost);
-      const newCredits = state.food_credits - cost;
+      const newCredits = Math.max(0, state.food_credits - cost);
       const newMood = newHappiness >= 80 ? 'happy' : newHappiness >= 60 ? 'content' : newHappiness >= 40 ? 'worried' : 'sad';
       const now = new Date().toISOString();
 
@@ -1281,6 +1283,16 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
     try {
       const result = await resetAndSeedNessieDummyData();
       res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── POST /v1/admin/seed (full seed via seed.ts) ───
+  router.post('/v1/admin/seed', async (_req: Request, res: Response) => {
+    try {
+      await runFullSeed();
+      res.json({ ok: true, message: 'Full seed complete' });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

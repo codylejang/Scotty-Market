@@ -403,18 +403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Non-critical data
     }
 
-    // Auto-generate budgets if none exist
-    try {
-      if (budgetData.length === 0) {
-        const generated = await generateBudgets(true);
-        if (generated.applied && generated.budgets.length > 0) {
-          const freshBudgets = await fetchBudgets().catch(() => []);
-          if (freshBudgets.length > 0) setBudgets(freshBudgets);
-        }
-      }
-    } catch {
-      // Budget generation failed — not critical
-    }
+
 
     // Daily payload may trigger LLM on first run — fetch separately so it doesn't block above
     try {

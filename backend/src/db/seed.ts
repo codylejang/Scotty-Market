@@ -35,8 +35,12 @@ function getLLMProvider(): LLMProvider {
 }
 
 async function main() {
-  console.log('Seeding database...');
   initDb();
+  await runFullSeed();
+}
+
+export async function runFullSeed() {
+  console.log('Seeding database...');
   const db = getDb();
 
   // Create demo user
@@ -108,7 +112,11 @@ async function main() {
   console.log('Seed complete. Demo user:', userId);
 }
 
-main().catch(err => {
-  console.error('Seed failed:', err);
-  process.exit(1);
-});
+// Run as CLI script when executed directly
+if (require.main === module) {
+  initDb();
+  runFullSeed().catch(err => {
+    console.error('Seed failed:', err);
+    process.exit(1);
+  });
+}

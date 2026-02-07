@@ -567,6 +567,8 @@ Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise 
     };
   }
 
+  
+
   private buildFallbackSuggestedActions(
     summary7d: any,
     summary30d: any,
@@ -674,6 +676,10 @@ Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise 
       recommended_actions: [],
       suggested_actions,
     };
+  }
+
+    buildSuggestedActionsPublic(summary7d: any, summary30d: any): ChatSuggestedAction[] {
+    return this.buildFallbackSuggestedActions(summary7d, summary30d);
   }
 
   /**
