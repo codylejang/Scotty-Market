@@ -339,7 +339,7 @@ export async function checkBackendHealth(): Promise<boolean> {
   try {
     const healthUrl = `${API_BASE_URL.replace('/api', '')}/health`;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeout = setTimeout(() => controller.abort(), 2000);
     const response = await fetch(healthUrl, { signal: controller.signal });
     clearTimeout(timeout);
     if (__DEV__) {
