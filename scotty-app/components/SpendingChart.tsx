@@ -125,7 +125,7 @@ export function SpendingChart({
           <View style={styles.balanceChipRow}>
             {accounts.slice(0, 2).map((acct, i) => (
               <View key={acct.id} style={[styles.balanceChip, { backgroundColor: i === 0 ? '#c8e6c9' : '#bbdefb' }]}>
-                <Text style={styles.balanceChipText}>{acct.nickname || acct.type}</Text>
+                <Text style={styles.balanceChipText} numberOfLines={1} ellipsizeMode="tail">{acct.nickname || acct.type}</Text>
               </View>
             ))}
             {accounts.length === 0 && (
@@ -182,7 +182,7 @@ export function SpendingChart({
         <View style={styles.donutVisual}>
           <View style={styles.donutRing}>
             {/* Colored segments around the ring */}
-            {top3.map(([cat, amount], i) => {
+            {entries.map(([cat, amount], i) => {
               const pct = (amount / total) * 100;
               return (
                 <View
@@ -208,7 +208,7 @@ export function SpendingChart({
 
         {/* Legend */}
         <View style={styles.donutLegend}>
-          {top3.map(([cat]) => (
+          {entries.map(([cat]) => (
             <View key={cat} style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: CATEGORY_COLORS[cat] }]} />
               <Text style={styles.legendLabel}>{CATEGORY_LABELS[cat].toUpperCase()}</Text>
@@ -398,6 +398,7 @@ const styles = StyleSheet.create({
     borderColor: '#000',
     borderRadius: 16,
     padding: 14,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
@@ -421,6 +422,7 @@ const styles = StyleSheet.create({
   },
   balanceChipRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
   },
   balanceChip: {
@@ -429,6 +431,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderWidth: 1,
     borderColor: '#000',
+    flexShrink: 1,
+    maxWidth: '100%',
   },
   balanceChipText: {
     fontFamily: FONT,
@@ -551,8 +555,9 @@ const styles = StyleSheet.create({
   },
   donutLegend: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 16,
+    gap: 10,
   },
   legendItem: {
     flexDirection: 'row',

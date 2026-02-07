@@ -340,7 +340,7 @@ export default function ChatScreen() {
             onPress={handleContinueToFeed}
             activeOpacity={0.85}
           >
-            <Text style={styles.continueText}>Continue to Feed →</Text>
+            <Text style={styles.continueText}>← Continue to Feed</Text>
           </TouchableOpacity>
         </View>
       )}
