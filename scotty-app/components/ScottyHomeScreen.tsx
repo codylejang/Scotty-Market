@@ -22,7 +22,6 @@ import HeartBurst from './HeartBurst';
 import ScottyQuestsModal from './ScottyQuestsModal';
 import { Scotty, ScottyRef } from './Scotty';
 import { useApp } from '../context/AppContext';
-import { generateDailyQuests } from '../services/mockData';
 import { fetchDailyQuests, refreshDailyQuests } from '../services/api';
 import { BudgetItem, Quest } from '../types';
 
@@ -81,16 +80,15 @@ export default function ScottyHomeScreen({
   const [foodCounts, setFoodCounts] = useState({ coffee: 1, food: 4, pets: 3 });
 
   // Quests data (no modal state here, controlled by parent)
-  const [quests, setQuests] = useState<Quest[]>(generateDailyQuests());
-  // Fetch quests from API on mount, fallback to mock data
+  const [quests, setQuests] = useState<Quest[]>([]);
+  // Fetch quests from API on mount.
   React.useEffect(() => {
     const loadQuests = async () => {
       try {
         const apiQuests = await fetchDailyQuests();
         setQuests(apiQuests);
       } catch (error) {
-        // If API fails, use mock data (already set in initial state)
-        console.log('Using mock quests data');
+        console.log('Failed to load quests');
       }
     };
     loadQuests();
@@ -101,8 +99,7 @@ export default function ScottyHomeScreen({
       const newQuests = await refreshDailyQuests();
       setQuests(newQuests);
     } catch (error) {
-      // Fallback to generating new mock data
-      setQuests(generateDailyQuests());
+      console.log('Failed to refresh quests');
     }
   }, []);
 

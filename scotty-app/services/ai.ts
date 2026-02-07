@@ -1,5 +1,5 @@
 import { Transaction, Achievement, ChatMessage, DailyInsight } from '../types';
-import { getSpendingByCategory, getTotalSpending } from './mockData';
+import { getSpendingByCategory, getTotalSpending } from './transactionMetrics';
 
 // AI Service for Scotty
 // Local AI service (mock or direct Claude API)
