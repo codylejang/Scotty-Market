@@ -87,6 +87,7 @@ export const AgentInsightOutput = z.object({
 
 export const AgentQuestOutput = z.object({
   title: z.string().max(120),
+  description: z.string().max(200),
   metric_type: MetricType,
   metric_params: z.record(z.unknown()),
   reward_food_type: FoodType,

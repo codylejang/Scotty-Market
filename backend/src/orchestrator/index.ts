@@ -115,10 +115,11 @@ export class Orchestrator {
               const now = new Date();
               const windowEnd = new Date(now.getTime() + input.output.quest.window_hours * 60 * 60 * 1000);
               db.prepare(`
-                INSERT INTO quest (id, user_id, status, title, window_start, window_end, metric_type, metric_params, reward_food_type, happiness_delta, created_by)
-                VALUES (?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, 'agent')
+                INSERT INTO quest (id, user_id, status, title, description, window_start, window_end, metric_type, metric_params, reward_food_type, happiness_delta, created_by)
+                VALUES (?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, ?, 'agent')
               `).run(
                 questId, input.userId, input.output.quest.title,
+                input.output.quest.description || '',
                 now.toISOString().split('T')[0],
                 windowEnd.toISOString().split('T')[0],
                 input.output.quest.metric_type,

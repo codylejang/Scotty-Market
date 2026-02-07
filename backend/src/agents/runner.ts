@@ -550,8 +550,19 @@ Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise 
     if (!hasActiveQuest && topCat) {
       const dailyAvg = (topCat[1] as number) / 7;
       const cap = Math.round(dailyAvg * 0.8 * 100) / 100; // 20% reduction target
+      const actionTips: Record<string, string> = {
+        'Food & Drink': `Pack lunch or cook at home instead of eating out. Your daily average is $${dailyAvg.toFixed(2)} — stay under $${cap.toFixed(2)} to complete this quest.`,
+        'Shopping': `Hold off on any non-essential purchases today. Sleep on it — if you still want it tomorrow, revisit. Stay under $${cap.toFixed(2)}.`,
+        'Entertainment': `Find a free activity today — stream something at home, go for a walk, or read. Keep spending under $${cap.toFixed(2)}.`,
+        'Transportation': `Walk, bike, or batch your errands to cut transit costs. Aim to spend under $${cap.toFixed(2)} today.`,
+        'Groceries': `Stick to your grocery list and skip impulse aisle items. Keep today's total under $${cap.toFixed(2)}.`,
+      };
+      const description = actionTips[topCat[0]]
+        || `Cut back on ${topCat[0]} today — skip one unnecessary purchase and stay under $${cap.toFixed(2)}. That's 20% below your $${dailyAvg.toFixed(2)} daily average.`;
+
       quest = {
         title: `Keep ${topCat[0]} under $${cap.toFixed(2)} today`,
+        description,
         metric_type: 'CATEGORY_SPEND_CAP',
         metric_params: { category: topCat[0], cap, window: 'daily' },
         reward_food_type: 'bone',
@@ -859,7 +870,7 @@ const DAILY_SYSTEM_PROMPT = `You are the AI engine for Scotty, a gamified financ
 Generate a daily digest as valid JSON matching this schema:
 {
   "insights": [{ "title": string (max 80 chars), "blurb": string (max 280 chars), "confidence": "HIGH"|"MEDIUM"|"LOW", "metrics": {} }],
-  "quest": { "title": string, "metric_type": "CATEGORY_SPEND_CAP"|"MERCHANT_SPEND_CAP"|"NO_MERCHANT_CHARGE"|"TRANSFER_AMOUNT", "metric_params": {}, "reward_food_type": "kibble"|"bone"|"steak"|"salmon"|"truffle", "happiness_delta": 1-20, "window_hours": 1-168 } or null,
+  "quest": { "title": string (short catchy name), "description": string (max 200 chars — a specific, actionable tip telling the user exactly what to do to complete the quest. Include a concrete action like 'Cook dinner at home instead of ordering DoorDash' or 'Skip your afternoon Starbucks run and brew coffee at the office'. Never just restate the title.), "metric_type": "CATEGORY_SPEND_CAP"|"MERCHANT_SPEND_CAP"|"NO_MERCHANT_CHARGE"|"TRANSFER_AMOUNT", "metric_params": {}, "reward_food_type": "kibble"|"bone"|"steak"|"salmon"|"truffle", "happiness_delta": 1-20, "window_hours": 1-168 } or null,
   "action": { "type": "SUBSCRIPTION_REVIEW"|"BUDGET_SUGGESTION"|"SAVINGS_TIP"|"SPENDING_ALERT", "payload": {}, "requires_approval": true } or null
 }
 
