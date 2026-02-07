@@ -527,6 +527,8 @@ interface BackendQuest {
   confirmed_value: number;
   pending_value: number;
   explanation: string;
+  created_by?: string; // 'agent' | 'goal_workshop'
+  goal_id?: string; // Reference to savings goal if created from goal workshop
 }
 
 const QUEST_EMOJI: Record<string, string> = {
@@ -559,6 +561,8 @@ function mapBackendQuest(q: BackendQuest, index: number): Quest {
     bgColor: QUEST_COLORS[index % QUEST_COLORS.length],
     status: mapQuestStatus(q.status),
     goalTarget: q.explanation || undefined,
+    createdBy: q.created_by,
+    goalId: q.goal_id,
   };
 }
 

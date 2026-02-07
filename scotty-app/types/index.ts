@@ -50,6 +50,8 @@ export interface Quest {
   bgColor: string;
   status: QuestStatus; // validated by backend agent
   goalTarget?: string; // Which savings goal this quest contributes to
+  createdBy?: string; // 'agent' | 'goal_workshop'
+  goalId?: string; // Reference to savings goal if created from goal workshop
 }
 
 export interface ScottyState {
