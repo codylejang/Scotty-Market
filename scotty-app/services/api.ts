@@ -87,6 +87,13 @@ interface BackendTransaction {
   pending: boolean;
 }
 
+/**
+ * Infers a frontend TransactionCategory from Nessie transaction `type` and `description`.
+ *
+ * @param type - Nessie transaction type (e.g., "deposit", "payment")
+ * @param description - Nessie transaction description or merchant text
+ * @returns The corresponding frontend TransactionCategory such as `groceries`, `food_dining`, `transport`, `entertainment`, `shopping`, `health`, or `other`
+ */
 function mapNessieCategory(type: string, description: string): TransactionCategory {
   const text = `${type} ${description}`.toLowerCase();
 
@@ -113,6 +120,12 @@ function mapNessieCategory(type: string, description: string): TransactionCatego
   return mapCategory(type);
 }
 
+/**
+ * Convert a backend transaction record into the frontend Transaction shape.
+ *
+ * @param bt - The backend transaction to convert
+ * @returns A Transaction where `amount` is non-negative, `category` is derived from `bt.category_primary`, `merchant` is `bt.merchant_name` or `bt.name`, `date` is a Date object parsed from `bt.date`, and `isSubscription` is `true` when `bt.category_primary` contains `subscription` (case-insensitive), `false` otherwise.
+ */
 function mapTransaction(bt: BackendTransaction): Transaction {
   return {
     id: bt.id,
@@ -124,7 +137,14 @@ function mapTransaction(bt: BackendTransaction): Transaction {
   };
 }
 
-// ─── Public API Functions ───
+/**
+ * Fetches recent transactions for the default prototype user.
+ *
+ * When the environment variable EXPO_PUBLIC_USE_NESSIE is `'true'`, transactions are sourced from the Nessie sandbox and mapped to the frontend Transaction shape; otherwise they are fetched from the backend API.
+ *
+ * @param days - Number of days of history to include (counting backwards from today)
+ * @returns An array of frontend-formatted Transaction objects for the requested time window
+ */
 
 export async function fetchTransactions(days: number = 30): Promise<Transaction[]> {
   if (process.env.EXPO_PUBLIC_USE_NESSIE === 'true') {
@@ -149,6 +169,11 @@ export async function fetchTransactions(days: number = 30): Promise<Transaction[
   return data.map(mapTransaction);
 }
 
+/**
+ * Seed the Nessie sandbox with dummy transaction data.
+ *
+ * @returns The result returned by the Nessie sandbox seeding operation.
+ */
 export async function seedNessieSandboxData() {
   return resetAndSeedNessieDummyData();
 }
