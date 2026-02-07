@@ -48,10 +48,18 @@ export function SpendingChart({ spending, budget, transactions = [], balance = 2
   const insightCategory = topCategory ? CATEGORY_LABELS[topCategory[0]] : 'spending';
   const insightMessage = `"Yo! Your dining spending is up 12% this week. Your savings goals are waiting for you!"`;
 
-  // Simulated monthly data for 6-month trend
-  const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  // Generate last 6 months
+  const now = new Date();
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now);
+    d.setMonth(d.getMonth() - (5 - i));
+    return d.toLocaleString('en-US', { month: 'short' });
+  });
   const savingsData = [320, 280, 410, 350, 390, 450];
   const maxSavings = Math.max(...savingsData);
+  
+  // Current month/year for donut subtitle
+  const currentMonthYear = now.toLocaleString('en-US', { month: 'short', year: 'numeric' }).toUpperCase();
 
   // Daily spend
   const dailySpend = transactions.length > 0
@@ -112,12 +120,12 @@ export function SpendingChart({ spending, budget, transactions = [], balance = 2
         <View style={styles.balanceCardSmall}>
           <Text style={styles.balanceLabelSmall}>SPENDABLE MONEY</Text>
           <Text style={styles.balanceAmountSmall}>${(dailySpend * 10).toFixed(0)}</Text>
-          <Text style={styles.balanceSubtext}>Left til 1st June</Text>
+          <Text style={styles.balanceSubtext}>Left til end of month</Text>
         </View>
         <View style={styles.balanceCardSmall}>
           <Text style={styles.balanceLabelSmall}>CREDIT CARD</Text>
-          <Text style={styles.balanceAmountSmall}>$215</Text>
-          <Text style={styles.balanceSubtext}>Due in 9 days</Text>
+          <Text style={styles.balanceAmountSmall}>${(Math.round(balance * 0.15)).toFixed(0)}</Text>
+          <Text style={styles.balanceSubtext}>Due soon</Text>
         </View>
       </View>
 
@@ -131,7 +139,7 @@ export function SpendingChart({ spending, budget, transactions = [], balance = 2
         <View style={styles.donutHeader}>
           <View>
             <Text style={styles.donutTitle}>Monthly Distribution</Text>
-            <Text style={styles.donutSubtitle}>OCT 2023 OVERVIEW</Text>
+            <Text style={styles.donutSubtitle}>{currentMonthYear} OVERVIEW</Text>
           </View>
           <Text style={styles.donutTotal}>${total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</Text>
         </View>
@@ -219,9 +227,9 @@ export function SpendingChart({ spending, budget, transactions = [], balance = 2
           </View>
         </View>
         <Text style={styles.goalAmount}>
-          <Text style={styles.goalAmountBold}>$1,200</Text> / $2,000
+          <Text style={styles.goalAmountBold}>${(balance * 0.5).toFixed(0)}</Text> / ${(balance * 0.83).toFixed(0)}
         </Text>
-        <Text style={styles.goalExpected}>EXPECTED: DEC 26, 2023</Text>
+        <Text style={styles.goalExpected}>EXPECTED: {new Date(now.getFullYear(), now.getMonth() + 3, 15).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()}</Text>
         <View style={styles.goalProgressBar}>
           <View style={[styles.goalProgressFill, { width: '60%' }]} />
           <View style={styles.goalProgressDashed} />

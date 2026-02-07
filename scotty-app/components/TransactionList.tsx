@@ -124,8 +124,8 @@ export function TransactionList({ transactions, limit }: TransactionListProps) {
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
-          <TouchableOpacity style={styles.filterButton}>
-            <Text style={styles.filterIcon}>🐾</Text>
+          <TouchableOpacity style={[styles.filterButton, styles.filterButtonDisabled]} disabled={true}>
+            <Text style={[styles.filterIcon, styles.filterIconDisabled]}>🐾</Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.searchHint}>"Sniffing out your spending patterns, human!"</Text>
@@ -200,8 +200,12 @@ const styles = StyleSheet.create({
   },
   filterIcon: {
     fontSize: 14,
+  },  filterButtonDisabled: {
+    opacity: 0.4,
   },
-  searchHint: {
+  filterIconDisabled: {
+    opacity: 0.6,
+  },  searchHint: {
     fontFamily: FONT,
     fontSize: 9,
     color: '#999',

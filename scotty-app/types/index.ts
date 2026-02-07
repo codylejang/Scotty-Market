@@ -35,6 +35,19 @@ export interface Achievement {
   aiGenerated: boolean;
 }
 
+export interface Quest {
+  id: string;
+  title: string;
+  subtitle: string; // e.g., "Meat Treat", "Sugar Free"
+  emoji: string;
+  xpReward: number;
+  progress: number; // current progress
+  goal: number; // total needed
+  progressUnit: string; // e.g., "days", "skips", "cups", "pack"
+  bgColor: string;
+  goalTarget?: string; // Which savings goal this quest contributes to
+}
+
 export interface ScottyState {
   mood: MoodState;
   happiness: number; // 0-100

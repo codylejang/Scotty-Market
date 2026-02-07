@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform,
 } from 'react-native';
+import { useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useApp } from '@/context/AppContext';
@@ -26,6 +27,7 @@ const TABS: { key: TabType; label: string }[] = [
 ];
 
 export default function FeedScreen() {
+  const navigation = useNavigation();
   const { transactions, profile, healthMetrics } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
   const [showGoalModal, setShowGoalModal] = useState(false);
@@ -48,8 +50,12 @@ export default function FeedScreen() {
             <Text style={styles.headerSub}>TRACKING YOUR LOOT, WOOF!</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.headerSettingsBtn}>
-          <Text style={styles.headerSettingsIcon}>☰</Text>
+        <TouchableOpacity 
+          style={[styles.headerSettingsBtn, styles.headerSettingsBtnDisabled]}
+          disabled={true}
+          accessible={false}
+        >
+          <Text style={[styles.headerSettingsIcon, styles.headerSettingsIconDisabled]}>☰</Text>
         </TouchableOpacity>
       </View>
 
@@ -184,6 +190,12 @@ const styles = StyleSheet.create({
   headerSettingsIcon: {
     fontSize: 18,
     color: '#000',
+  },
+  headerSettingsBtnDisabled: {
+    opacity: 0.4,
+  },
+  headerSettingsIconDisabled: {
+    color: '#999',
   },
 
   // Tab Bar

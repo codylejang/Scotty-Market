@@ -17,6 +17,7 @@
     "@expo-google-fonts/manrope": "^0.4.2",
     "@expo-google-fonts/vt323": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
+    "@react-native-community/slider": "^5.1.2",
     "@react-navigation/native": "^7.1.8",
     "expo": "~54.0.33",
     "expo-constants": "~18.0.13",

@@ -16,47 +16,17 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import Svg, { Path, Rect } from 'react-native-svg';
 import AnimatedProgressBar from './AnimatedProgressBar';
 import DraggableFoodItem from './DraggableFoodItem';
 import HeartBurst from './HeartBurst';
+import ScottyQuestsModal from './ScottyQuestsModal';
+import { Scotty, ScottyRef } from './Scotty';
 import { useApp } from '../context/AppContext';
+import { generateDailyQuests } from '../services/mockData';
+import { fetchDailyQuests, refreshDailyQuests } from '../services/api';
+import { Quest } from '../types';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
-
-function PixelScotty({ size }: { size: number }) {
-  return (
-    <Svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      style={{ imageRendering: 'pixelated' } as any}
-    >
-      {/* Main body/head shape - brown fur */}
-      <Path
-        d="M7 6 h10 v1 h2 v1 h1 v2 h1 v5 h-1 v2 h-1 v1 h-1 v1 h-1 v1 h-2 v-1 h-1 v1 h-2 v-1 h-2 v-1 h-1 v-1 h-1 v-1 h-1 v-2 h-1 v-5 h1 v-2 h1 v-1 h2 z"
-        fill="#4a3728"
-      />
-      {/* Ears */}
-      <Path d="M6 5 h2 v3 h-2 z M16 5 h2 v3 h-2 z" fill="#4a3728" />
-      {/* White face/snout area */}
-      <Path
-        d="M10 10 h4 v3 h2 v2 h-1 v1 h-6 v-1 h-1 v-2 h2 z"
-        fill="white"
-      />
-      {/* Eye whites */}
-      <Rect fill="white" height={1} width={1} x={9} y={9} />
-      <Rect fill="white" height={1} width={1} x={14} y={9} />
-      {/* Pupils */}
-      <Rect fill="#1a1a1a" height={1} width={1} x={10} y={10} />
-      <Rect fill="#1a1a1a" height={1} width={1} x={14} y={10} />
-      {/* Nose */}
-      <Path d="M11 12h2v1h-2z" fill="#1a1a1a" />
-      {/* Tongue */}
-      <Path d="M8 17h8v1h-8z" fill="#ffab91" />
-    </Svg>
-  );
-}
 
 // Budget data indexed by tab
 const budgetsByTab = {
@@ -149,7 +119,17 @@ const budgetsByTab = {
   ],
 };
 
-export default function ScottyHomeScreen() {
+interface ScottyHomeScreenProps {
+  showQuestsModal?: boolean;
+  onCloseQuestsModal?: () => void;
+  onOpenQuestsModal?: () => void;
+}
+
+export default function ScottyHomeScreen({
+  showQuestsModal = false,
+  onCloseQuestsModal,
+  onOpenQuestsModal,
+}: ScottyHomeScreenProps = {}) {
   const { feedScotty } = useApp();
   const [activeBudgetTab, setActiveBudgetTab] = useState<'Daily' | 'Weekly' | 'Monthly'>('Daily');
 
@@ -159,6 +139,32 @@ export default function ScottyHomeScreen() {
   // Food counts
   const [foodCounts, setFoodCounts] = useState({ coffee: 1, food: 4, pets: 3 });
 
+  // Quests data (no modal state here, controlled by parent)
+  const [quests, setQuests] = useState<Quest[]>(generateDailyQuests());
+// Fetch quests from API on mount, fallback to mock data
+  React.useEffect(() => {
+    const loadQuests = async () => {
+      try {
+        const apiQuests = await fetchDailyQuests();
+        setQuests(apiQuests);
+      } catch (error) {
+        // If API fails, use mock data (already set in initial state)
+        console.log('Using mock quests data');
+      }
+    };
+    loadQuests();
+  }, []);
+
+  const handleRefreshQuests = useCallback(async () => {
+    try {
+      const newQuests = await refreshDailyQuests();
+      setQuests(newQuests);
+    } catch (error) {
+      // Fallback to generating new mock data
+      setQuests(generateDailyQuests());
+    }
+  }, []);
+
   // Scotty position for drop-zone detection
   const [scottyLayout, setScottyLayout] = useState<{
     x: number;
@@ -167,6 +173,7 @@ export default function ScottyHomeScreen() {
     height: number;
   } | null>(null);
   const scottyRef = useRef<View>(null);
+  const scottyAnimRef = useRef<ScottyRef>(null);
 
   // Heart burst state
   const [heartBurst, setHeartBurst] = useState<{ x: number; y: number } | null>(null);
@@ -183,12 +190,16 @@ export default function ScottyHomeScreen() {
     width: `${happinessWidth.value}%`,
   }));
 
-  const handleScottyLayout = useCallback((e: LayoutChangeEvent) => {
+  const measureScotty = useCallback(() => {
     // Measure in window coords for absolute positioning
     scottyRef.current?.measureInWindow((x, y, width, height) => {
       setScottyLayout({ x, y, width, height });
     });
   }, []);
+
+  const handleScottyLayout = useCallback((e: LayoutChangeEvent) => {
+    measureScotty();
+  }, [measureScotty]);
 
   const handleFeed = useCallback(
     (type: 'coffee' | 'food' | 'pets') => {
@@ -204,6 +215,9 @@ export default function ScottyHomeScreen() {
         });
       }
 
+      // Trigger Scotty's loved animation
+      scottyAnimRef.current?.showLoved();
+
       // Call context feedScotty
       feedScotty(type === 'food' ? 'meal' : 'treat');
     },
@@ -216,6 +230,10 @@ export default function ScottyHomeScreen() {
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        onScroll={measureScotty}
+        scrollEventThrottle={100}
+        onScrollBeginDrag={measureScotty}
+        onMomentumScrollEnd={measureScotty}
       >
         {/* Hero Section */}
         <View style={styles.heroSection}>
@@ -231,7 +249,7 @@ export default function ScottyHomeScreen() {
                 style={styles.scottyWrapper}
                 onLayout={handleScottyLayout}
               >
-                <PixelScotty size={160} />
+                <Scotty ref={scottyAnimRef} size={160} />
               </View>
             </View>
 
@@ -279,6 +297,8 @@ export default function ScottyHomeScreen() {
 
         {/* Savings Goals Section */}
         <View style={styles.section}>
+          <Text style={styles.sectionHeaderTitle}>SAVINGS GOALS</Text>
+
           <View style={styles.goalCard}>
             <View style={styles.goalHeader}>
               <View style={styles.goalIcon}>
@@ -414,6 +434,14 @@ export default function ScottyHomeScreen() {
           />
         </View>
       )}
+
+      {/* Quests Modal */}
+      <ScottyQuestsModal
+        visible={showQuestsModal}
+        onClose={onCloseQuestsModal || (() => {})}
+        quests={quests}
+        onRefreshQuests={handleRefreshQuests}
+      />
     </View>
   );
 }
@@ -525,6 +553,14 @@ const styles = StyleSheet.create({
   section: {
     paddingHorizontal: 20,
     gap: 12,
+  },
+  sectionHeaderTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 2,
+    marginBottom: 12,
   },
 
   // Goal Cards

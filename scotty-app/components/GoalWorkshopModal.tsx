@@ -10,6 +10,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 
 interface GoalWorkshopModalProps {
   visible: boolean;
@@ -29,7 +30,7 @@ export default function GoalWorkshopModal({ visible, onClose }: GoalWorkshopModa
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <KeyboardAvoidingView behavior="padding" style={styles.keyboardView}>
           <View style={styles.modal}>
@@ -103,18 +104,17 @@ export default function GoalWorkshopModal({ visible, onClose }: GoalWorkshopModa
                     <Text style={styles.percentValue}>{budgetPercent}</Text>
                     <Text style={styles.percentSymbol}>%</Text>
                   </View>
-                  <View style={styles.sliderTrack}>
-                    <View
-                      style={[
-                        styles.sliderFill,
-                        { width: `${budgetPercent}%` },
-                      ]}
-                    />
-                    <View
-                      style={[
-                        styles.sliderThumb,
-                        { left: `${budgetPercent}%` },
-                      ]}
+                  <View style={styles.sliderContainer}>
+                    <Slider
+                      style={styles.slider}
+                      minimumValue={0}
+                      maximumValue={100}
+                      step={1}
+                      value={budgetPercent}
+                      onValueChange={(value) => setBudgetPercent(Math.round(value))}
+                      minimumTrackTintColor="#9b59b6"
+                      maximumTrackTintColor="#e0e0e0"
+                      thumbTintColor="#9b59b6"
                     />
                   </View>
                   <Text style={styles.percentLabel}>OF MONTHLY INCOME</Text>
@@ -332,6 +332,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     width: 60,
     textAlign: 'right',
+  },
+  sliderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  slider: {
+    height: 40,
   },
 
   // Submit

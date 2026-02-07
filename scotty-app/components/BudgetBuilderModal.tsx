@@ -42,7 +42,7 @@ export default function BudgetBuilderModal({ visible, onClose }: BudgetBuilderMo
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <KeyboardAvoidingView behavior="padding" style={styles.keyboardView}>
           <View style={styles.modal}>
