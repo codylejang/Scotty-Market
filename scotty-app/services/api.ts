@@ -462,22 +462,21 @@ export async function fetchAccounts(): Promise<{ accounts: AccountInfo[]; totalB
 // ─── Daily Spend ───
 
 export async function fetchTodaySpend(): Promise<number> {
-  // Calculate today's spend from user transactions
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
+  const now = new Date();
+
   try {
     // Fetch recent transactions and filter for today
-    const transactions = await fetchTransactions(7); // Get last week to ensure we have today
-    
+    const transactions = await fetchTransactions(7);
+
     const todaySpend = transactions
       .filter(t => {
-        const txDate = new Date(t.date);
-        txDate.setHours(0, 0, 0, 0);
-        return txDate.getTime() === today.getTime() && !t.isIncoming;
+        // Match "today" using time diff < 24h (same as TransactionList)
+        const d = t.date instanceof Date ? t.date : new Date(t.date);
+        const diffMs = now.getTime() - d.getTime();
+        return diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000 && !t.isIncoming;
       })
       .reduce((sum, t) => sum + t.amount, 0);
-    
+
     return Math.round(todaySpend * 100) / 100;
   } catch (error) {
     console.warn('[API] Failed to fetch today spend:', error);

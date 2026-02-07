@@ -137,6 +137,7 @@ export default function ScottyHomeScreen({
     feedScotty,
     budgets,
     budgetProjections,
+    transactions,
     totalBalance,
     dailySpend,
     scottyState,
@@ -294,6 +295,35 @@ export default function ScottyHomeScreen({
     ? Math.min(100, Math.round((dailySpend / totalDailyLimit) * 100))
     : 0;
 
+  // Compute today's actual spending per budget category from real transactions
+  const todaySpendByCategory = useMemo(() => {
+    const catMap: Record<string, string[]> = {
+      'Food & Drink': ['food_dining', 'groceries'],
+      'Groceries': ['groceries'],
+      'Transportation': ['transport'],
+      'Entertainment': ['entertainment'],
+      'Shopping': ['shopping'],
+      'Health': ['health'],
+      'Subscription': ['subscriptions'],
+    };
+    const now = new Date();
+
+    const result: Record<string, number> = {};
+    for (const [budgetCat, frontendCats] of Object.entries(catMap)) {
+      const todayTxns = transactions.filter(t => {
+        // Match "today" the same way TransactionList does: time diff < 24 hours
+        const d = t.date instanceof Date ? t.date : new Date(t.date);
+        const diffMs = now.getTime() - d.getTime();
+        const isToday = diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
+        return isToday
+          && frontendCats.includes(t.category)
+          && !t.isIncoming;
+      });
+      result[budgetCat] = todayTxns.reduce((sum, t) => sum + t.amount, 0);
+    }
+    return result;
+  }, [transactions]);
+
   const budgetsByTab = useMemo(() => {
     const byTab: Record<BudgetTab, Array<{
       id: string;
@@ -317,18 +347,18 @@ export default function ScottyHomeScreen({
 
     budgets.forEach((budget, index) => {
       const dailyLimit = getDailyLimit(budget);
-      const budgetPeriodDays = budget.frequency === 'Day' ? 1 : budget.frequency === 'Week' ? 7 : 30;
-      const dailySpendRate = budgetPeriodDays > 0 ? budget.spent / budgetPeriodDays : 0;
 
       const limits: Record<BudgetTab, number> = {
         Daily: dailyLimit,
         Monthly: dailyLimit * 30,
         Yearly: dailyLimit * 365,
       };
+      // Daily: today's actual spending; Monthly: period total; Yearly: extrapolated from monthly
+      const todayCatSpend = todaySpendByCategory[budget.category] || 0;
       const spentByTab: Record<BudgetTab, number> = {
-        Daily: dailySpendRate,
-        Monthly: dailySpendRate * 30,
-        Yearly: dailySpendRate * 365,
+        Daily: todayCatSpend,
+        Monthly: budget.spent,
+        Yearly: budget.spent * 12,
       };
       const emoji = CATEGORY_EMOJI[budget.category] || '📊';
       const color = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
@@ -377,7 +407,7 @@ export default function ScottyHomeScreen({
     });
 
     return byTab;
-  }, [budgets, budgetProjections]);
+  }, [budgets, budgetProjections, todaySpendByCategory]);
 
   const handleTutorialPrimary = () => {
     if (!currentStep) return;
