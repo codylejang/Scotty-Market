@@ -43,6 +43,7 @@ export function ingestTransactions(transactions: Transaction[]): IngestionResult
         const result = updatePendingStmt.run(txn.pending_transaction_id, txn.user_id);
         if (result.changes > 0) {
           pendingLinked++;
+          updated += result.changes;
         }
       }
 

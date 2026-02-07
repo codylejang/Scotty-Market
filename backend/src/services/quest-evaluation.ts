@@ -180,10 +180,8 @@ export function evaluateQuest(questId: string): EvaluationResult {
         newStatus = 'COMPLETED_PROVISIONAL';
         explanation = `$${confirmedValue.toFixed(2)} confirmed + $${pendingValue.toFixed(2)} pending toward $${targetAmount.toFixed(2)} target.`;
       } else if (windowExpired) {
-        newStatus = confirmedValue >= targetAmount ? 'COMPLETED_VERIFIED' : 'EXPIRED';
-        explanation = windowExpired && confirmedValue < targetAmount
-          ? `Only $${confirmedValue.toFixed(2)} of $${targetAmount.toFixed(2)} transferred before deadline.`
-          : explanation;
+        newStatus = 'EXPIRED';
+        explanation = `Only $${confirmedValue.toFixed(2)} of $${targetAmount.toFixed(2)} transferred before deadline.`;
       } else {
         newStatus = 'ACTIVE';
         explanation = `$${confirmedValue.toFixed(2)} of $${targetAmount.toFixed(2)} transferred so far.`;
