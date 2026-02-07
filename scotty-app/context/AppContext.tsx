@@ -25,6 +25,7 @@ import {
   fetchTransactions,
   fetchHealthMetrics,
   fetchScottyState,
+  fetchUserProfile,
   feedScottyAPI,
   sendChatMessageAPI,
   fetchActiveQuest,
@@ -92,6 +93,12 @@ const defaultScottyState: ScottyState = {
   foodCredits: 10,
 };
 
+const defaultProfile: UserProfile = {
+  monthlyBudget: 1500,
+  monthlySavingsGoal: 300,
+  currentBalance: 2400,
+};
+
 const defaultHealthMetrics: HealthMetrics = {
   budgetAdherence: 70,
   savingsRate: 50,
@@ -101,11 +108,7 @@ const defaultHealthMetrics: HealthMetrics = {
 
 const DAILY_HAPPINESS_DECAY = 20;
 const HAPPINESS_DECAY_INTERVAL_MS = 60_000;
-const defaultProfile: UserProfile = {
-  monthlyBudget: 1500,
-  monthlySavingsGoal: 300,
-  currentBalance: 2400,
-};
+
 
 const AppContext = createContext<AppState | null>(null);
 
@@ -144,7 +147,7 @@ function buildLocalAchievements(transactions: Transaction[]): Achievement[] {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [profile] = useState<UserProfile>(defaultProfile);
+  const [profile, setProfile] = useState<UserProfile>(defaultProfile);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [scottyState, setScottyState] = useState<ScottyState>(defaultScottyState);
@@ -198,13 +201,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Initialize on mount: show mock data immediately, then try backend in background
   useEffect(() => {
-    // Show something right away
-    initializeFromMock();
-    // Then try to upgrade to backend data (non-blocking)
-    tryBackendUpgrade();
+    initializeApp();
   }, []);
 
-  function initializeFromMock() {
+  function initializeFallbackState() {
     const metrics = calculateHealthMetrics({
       transactions,
       monthlyBudget: profile.monthlyBudget,
@@ -222,40 +222,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     generateDailyInsight(transactions).then(setDailyInsight);
   }
 
-  async function tryBackendUpgrade() {
+  async function initializeApp() {
     const isHealthy = await checkBackendHealth();
-    if (!isHealthy) return;
+    if (!isHealthy) {
+      initializeFallbackState();
+      return;
+    }
     setBackendConnected(true);
 
-    // Fetch backend data with a global timeout so the app never hangs
-    // Keep backendConnected=true even if data loading times out, because
-    // individual features (like chat) may still work fine with the backend.
     try {
       await withTimeout(loadFromBackend(), 15000);
     } catch (err) {
-      console.warn('[AppContext] Backend data loading timed out, keeping mock data. Chat still uses backend.', err);
+      console.warn('[AppContext] Backend upgrade failed, using fallback state:', err);
+      setBackendConnected(false);
+      initializeFallbackState();
     }
   }
 
   async function loadFromBackend() {
-    // Fetch non-blocking data first (fast endpoints) — each catches individually
-    // so one failure doesn't block the rest
-    const [txns, metrics, scotty] = await Promise.all([
-      fetchTransactions(30).catch((e) => { console.warn('[AppContext] fetchTransactions failed:', e.message); return [] as Transaction[]; }),
-      fetchHealthMetrics().catch((e) => { console.warn('[AppContext] fetchHealthMetrics failed:', e.message); return defaultHealthMetrics; }),
-      fetchScottyState().catch((e) => { console.warn('[AppContext] fetchScottyState failed:', e.message); return defaultScottyState; }),
+    console.log('[AppContext] Loading data from backend...');
+    
+    const [txns, metrics, scotty, userProfile] = await Promise.all([
+      fetchTransactions(30),
+      fetchHealthMetrics(),
+      fetchScottyState(),
+      fetchUserProfile(),
     ]);
 
-    if (txns.length > 0) setTransactions(txns);
+    console.log('[AppContext] Core data loaded:', {
+      transactions: txns.length,
+      profile: userProfile,
+      scottyHappiness: scotty.happiness,
+    });
+
+    setTransactions(txns);
+    setProfile(userProfile);
     setScottyState(scotty);
     setHealthMetrics(metrics);
 
     // Fetch budgets, accounts, daily spend (non-critical, don't block)
     try {
       const [budgetData, accountData, todaySpend] = await Promise.all([
-        fetchBudgets().catch(() => []),
-        fetchAccounts().catch(() => ({ accounts: [] as AccountInfo[], totalBalance: 0 })),
-        fetchTodaySpend().catch(() => 0),
+        fetchBudgets().catch((err) => { console.warn('[AppContext] Budget fetch failed:', err); return []; }),
+        fetchAccounts().catch((err) => { console.warn('[AppContext] Accounts fetch failed:', err); return { accounts: [] as AccountInfo[], totalBalance: 0 }; }),
+        fetchTodaySpend().catch((err) => { console.warn('[AppContext] Daily spend fetch failed:', err); return 0; }),
       ]);
 
       if (budgetData.length > 0) {
@@ -284,7 +294,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAccounts(accountData.accounts);
       setTotalBalance(accountData.totalBalance);
       setDailySpend(todaySpend);
-    } catch {
+      
+      console.log('[AppContext] Financial data loaded:', {
+        budgets: budgetData.length,
+        accounts: accountData.accounts.length,
+        totalBalance: accountData.totalBalance,
+        dailySpend: todaySpend,
+      });
+    } catch (err) {
+      console.warn('[AppContext] Failed to fetch non-critical financial data:', err);
       // Non-critical data — keep defaults
     }
 

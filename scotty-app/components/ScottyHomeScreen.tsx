@@ -24,6 +24,13 @@ import { Scotty, ScottyRef } from './Scotty';
 import { useApp } from '../context/AppContext';
 import { fetchDailyQuests, refreshDailyQuests } from '../services/api';
 import { BudgetItem, Quest } from '../types';
+import Svg, { Path, Rect } from 'react-native-svg';
+import { fetchBudgets } from '@/services/api';
+import {
+  getTotalSpending,
+  getTopSpendingCategories,
+} from '@/services/transactionMetrics';
+import { TransactionCategory } from '@/types';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
@@ -88,7 +95,7 @@ export default function ScottyHomeScreen({
   }, [creditShare]);
 
   // Quests data: prefer context (backend) quests, fallback to mock
-  const [quests, setQuests] = useState<Quest[]>(generateDailyQuests());
+  const [quests, setQuests] = useState<Quest[]>([]);
   React.useEffect(() => {
     if (contextQuests.length > 0) {
       setQuests(contextQuests);
@@ -483,6 +490,57 @@ export default function ScottyHomeScreen({
       />
     </View>
   );
+}
+
+function getBudgetScale(tab: 'Daily' | 'Weekly' | 'Monthly', now: Date): number {
+  if (tab === 'Monthly') return 1;
+  if (tab === 'Weekly') return 1 / 4.345;
+
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return 1 / daysInMonth;
+}
+
+function projectProjectedSpent(currentSpent: number): number {
+  const now = new Date();
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const elapsed = Math.max(0.1, dayOfMonth / daysInMonth);
+  return currentSpent / elapsed;
+}
+
+function formatCategoryName(category: string): string {
+  return category
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (s) => s.toUpperCase());
+}
+
+function categoryEmoji(category: TransactionCategory): string {
+  const byCategory: Record<TransactionCategory, string> = {
+    food_dining: '🍔',
+    groceries: '🛒',
+    transport: '🚗',
+    entertainment: '🎭',
+    shopping: '🛍️',
+    subscriptions: '📺',
+    utilities: '💡',
+    education: '📚',
+    health: '💊',
+    other: '🐾',
+  };
+  return byCategory[category];
+}
+
+function categoryEmojiFromName(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.includes('food') || lower.includes('dining')) return '🍔';
+  if (lower.includes('shop')) return '🛍️';
+  if (lower.includes('entertain')) return '🎭';
+  if (lower.includes('transport') || lower.includes('travel')) return '🚗';
+  if (lower.includes('groc')) return '🛒';
+  if (lower.includes('util')) return '💡';
+  if (lower.includes('subscript')) return '📺';
+  if (lower.includes('health')) return '💊';
+  return '🐾';
 }
 
 const styles = StyleSheet.create({
