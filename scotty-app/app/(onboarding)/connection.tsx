@@ -6,11 +6,13 @@ import { useRouter } from 'expo-router';
 import Scotty from '@/components/Scotty';
 import { seedNessieDemo } from '@/services/api';
 import { Colors, Shadows } from '@/constants/Theme';
+import { useApp } from '@/context/AppContext';
 
 const SCOTTY_NAME = 'Scotty';
 
 export default function ConnectionScreen() {
   const router = useRouter();
+  const { resetTutorial } = useApp();
   const [isSeeding, setIsSeeding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +29,7 @@ export default function ConnectionScreen() {
     setError(null);
     try {
       await seedNessieDemo();
+      resetTutorial();
       router.replace('/(tabs)');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Demo seed failed.';

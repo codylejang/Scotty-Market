@@ -101,6 +101,7 @@ interface AppState {
   advanceTutorial: () => void;
   skipTutorial: () => void;
   completeTutorial: () => void;
+  resetTutorial: () => void;
 }
 
 const defaultScottyState: ScottyState = {
@@ -543,6 +544,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     completeTutorial();
   };
 
+  const resetTutorial = () => {
+    AsyncStorage.removeItem(TUTORIAL_STORAGE_KEY).catch(() => undefined);
+    setTutorialStep(0);
+    setTutorialActive(true);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -572,6 +579,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         advanceTutorial,
         skipTutorial,
         completeTutorial,
+        resetTutorial,
       }}
     >
       {children}

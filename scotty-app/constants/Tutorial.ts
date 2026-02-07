@@ -9,6 +9,8 @@ export type TutorialStep = {
   primaryLabel: string;
   tab?: FeedTabKey;
   isFinal?: boolean;
+  /** When true, dismiss modal and wait for user to feed Scotty before advancing. */
+  waitForFeed?: boolean;
 };
 
 export const TUTORIAL_STEPS: TutorialStep[] = [
@@ -24,7 +26,15 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     screen: 'home',
     title: 'Feed Scotty',
     body: 'Drag a snack onto Scotty to boost happiness. Good habits earn food credits.',
-    primaryLabel: 'Next',
+    primaryLabel: 'Try it!',
+  },
+  {
+    id: 'home-feed-try',
+    screen: 'home',
+    title: 'Your turn!',
+    body: 'Drag a treat onto Scotty now.',
+    primaryLabel: '',
+    waitForFeed: true,
   },
   {
     id: 'home-budget',

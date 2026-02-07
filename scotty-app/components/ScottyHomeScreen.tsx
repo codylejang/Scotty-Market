@@ -24,9 +24,10 @@ import ScottyQuestsModal from './ScottyQuestsModal';
 import { Scotty, ScottyRef } from './Scotty';
 import { useApp } from '../context/AppContext';
 import { fetchDailyQuests, refreshDailyQuests } from '../services/api';
-import { BudgetItem, Quest } from '../types';
+import { BudgetItem, Quest, TransactionCategory } from '../types';
 import TutorialModal from './TutorialModal';
 import { TUTORIAL_STEPS } from '../constants/Tutorial';
+import { Colors, Shadows } from '../constants/Theme';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
@@ -168,6 +169,23 @@ export default function ScottyHomeScreen({
     measureScotty();
   }, [measureScotty]);
 
+  // Tutorial state — must be declared before handleFeed
+  const currentStep = tutorial.active ? TUTORIAL_STEPS[tutorial.step] : null;
+  const isWaitingForFeed = currentStep?.waitForFeed === true;
+  const showTutorial = tutorial.active && currentStep?.screen === 'home' && !isWaitingForFeed;
+
+  // Grant a bonus food credit during the interactive feed tutorial step
+  const [tutorialFoodGranted, setTutorialFoodGranted] = React.useState(false);
+  React.useEffect(() => {
+    if (isWaitingForFeed && !tutorialFoodGranted) {
+      const total = foodCounts.coffee + foodCounts.food + foodCounts.pets;
+      if (total <= 0) {
+        setFoodCounts((prev) => ({ ...prev, food: prev.food + 1 }));
+      }
+      setTutorialFoodGranted(true);
+    }
+  }, [isWaitingForFeed, tutorialFoodGranted, foodCounts]);
+
   const handleFeed = useCallback(
     (type: 'coffee' | 'food' | 'pets') => {
       if (foodCounts[type] <= 0) return;
@@ -187,8 +205,13 @@ export default function ScottyHomeScreen({
 
       // Call context feedScotty
       feedScotty('treat');
+
+      // If we're on the interactive tutorial feed step, advance after a short delay
+      if (isWaitingForFeed) {
+        setTimeout(() => advanceTutorial(), 900);
+      }
     },
-    [foodCounts, scottyLayout, feedScotty]
+    [foodCounts, scottyLayout, feedScotty, isWaitingForFeed, advanceTutorial]
   );
 
   const handleBudgetTabPress = useCallback((tab: BudgetTab) => {
@@ -254,9 +277,6 @@ export default function ScottyHomeScreen({
     return byTab;
   }, [budgets]);
 
-  const currentStep = tutorial.active ? TUTORIAL_STEPS[tutorial.step] : null;
-  const showTutorial = tutorial.active && currentStep?.screen === 'home';
-
   const handleTutorialPrimary = () => {
     if (!currentStep) return;
     if (currentStep.id === 'home-go-feed') {
@@ -269,6 +289,12 @@ export default function ScottyHomeScreen({
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Floating hint banner during interactive feed step */}
+      {isWaitingForFeed && (
+        <View style={styles.feedHintBanner}>
+          <Text style={styles.feedHintText}>🐾  Drag a treat onto Scotty!</Text>
+        </View>
+      )}
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -576,6 +602,26 @@ function categoryEmojiFromName(name: string): string {
 }
 
 const styles = StyleSheet.create({
+  feedHintBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 50,
+    backgroundColor: Colors.coral,
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.ink,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  feedHintText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.white,
+    letterSpacing: 0.5,
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff6f3',
