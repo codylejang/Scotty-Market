@@ -243,6 +243,11 @@ export default function ScottyHomeScreen({
     }
   }, []);
 
+  // Filter quests: Daily Quests are agent-generated, not from goal workshop
+  const dailyQuests = useMemo(() => {
+    return quests.filter((q) => q.createdBy !== 'goal_workshop');
+  }, [quests]);
+
   // Demo popup — hardcoded yesterday's completed quest that awards food credits
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [demoClaimed, setDemoClaimed] = useState(false);
@@ -616,7 +621,7 @@ export default function ScottyHomeScreen({
             </View>
           </View>
 
-          {quests.slice(0, 3).map((quest, index) => (
+          {dailyQuests.slice(0, 3).map((quest, index) => (
             <QuestCard key={quest.id} quest={quest} index={index} />
           ))}
         </View>
