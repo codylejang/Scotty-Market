@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,23 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
+  LayoutChangeEvent,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withDelay,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import Svg, { Path, Rect } from 'react-native-svg';
+import AnimatedProgressBar from './AnimatedProgressBar';
+import DraggableFoodItem from './DraggableFoodItem';
+import HeartBurst from './HeartBurst';
+import { useApp } from '../context/AppContext';
+
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 function PixelScotty({ size }: { size: number }) {
   return (
@@ -44,199 +58,363 @@ function PixelScotty({ size }: { size: number }) {
   );
 }
 
+// Budget data indexed by tab
+const budgetsByTab = {
+  Daily: [
+    {
+      emoji: '🎭',
+      name: 'Entertainment',
+      spent: 45.00,
+      limit: 60.00,
+      percent: 75,
+      projection: 92,
+      color: '#9b59b6',
+    },
+    {
+      emoji: '🍔',
+      name: 'Dining Out',
+      spent: 112.00,
+      limit: 120.00,
+      percent: 93,
+      projection: 115,
+      color: '#ff8a65',
+    },
+    {
+      emoji: '🛍️',
+      name: 'Shopping',
+      spent: 20.00,
+      limit: 150.00,
+      percent: 15,
+      projection: 40,
+      color: '#81d4fa',
+    },
+  ],
+  Weekly: [
+    {
+      emoji: '🎬',
+      name: 'Entertainment',
+      spent: 180.00,
+      limit: 250.00,
+      percent: 72,
+      projection: 88,
+      color: '#9b59b6',
+    },
+    {
+      emoji: '🍕',
+      name: 'Dining Out',
+      spent: 420.00,
+      limit: 500.00,
+      percent: 84,
+      projection: 98,
+      color: '#ff8a65',
+    },
+    {
+      emoji: '🎮',
+      name: 'Gaming',
+      spent: 50.00,
+      limit: 100.00,
+      percent: 50,
+      projection: 65,
+      color: '#81d4fa',
+    },
+  ],
+  Monthly: [
+    {
+      emoji: '🏠',
+      name: 'Housing',
+      spent: 1200.00,
+      limit: 1500.00,
+      percent: 80,
+      projection: 80,
+      color: '#9b59b6',
+    },
+    {
+      emoji: '🚗',
+      name: 'Transportation',
+      spent: 300.00,
+      limit: 400.00,
+      percent: 75,
+      projection: 85,
+      color: '#ff8a65',
+    },
+    {
+      emoji: '💳',
+      name: 'Subscriptions',
+      spent: 89.00,
+      limit: 150.00,
+      percent: 59,
+      projection: 70,
+      color: '#81d4fa',
+    },
+  ],
+};
+
 export default function ScottyHomeScreen() {
+  const { feedScotty } = useApp();
   const [activeBudgetTab, setActiveBudgetTab] = useState<'Daily' | 'Weekly' | 'Monthly'>('Daily');
 
+  // Get budgets for the active tab
+  const budgetsForActiveTab = budgetsByTab[activeBudgetTab];
+
+  // Food counts
+  const [foodCounts, setFoodCounts] = useState({ coffee: 1, food: 4, pets: 3 });
+
+  // Scotty position for drop-zone detection
+  const [scottyLayout, setScottyLayout] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const scottyRef = useRef<View>(null);
+
+  // Heart burst state
+  const [heartBurst, setHeartBurst] = useState<{ x: number; y: number } | null>(null);
+
+  // Happiness bar animated width
+  const happinessWidth = useSharedValue(0);
+  React.useEffect(() => {
+    happinessWidth.value = withDelay(
+      200,
+      withTiming(82, { duration: 800, easing: Easing.out(Easing.cubic) })
+    );
+  }, []);
+  const happinessAnimStyle = useAnimatedStyle(() => ({
+    width: `${happinessWidth.value}%`,
+  }));
+
+  const handleScottyLayout = useCallback((e: LayoutChangeEvent) => {
+    // Measure in window coords for absolute positioning
+    scottyRef.current?.measureInWindow((x, y, width, height) => {
+      setScottyLayout({ x, y, width, height });
+    });
+  }, []);
+
+  const handleFeed = useCallback(
+    (type: 'coffee' | 'food' | 'pets') => {
+      if (foodCounts[type] <= 0) return;
+
+      setFoodCounts((prev) => ({ ...prev, [type]: prev[type] - 1 }));
+
+      // Trigger heart burst at Scotty's center
+      if (scottyLayout) {
+        setHeartBurst({
+          x: scottyLayout.x + scottyLayout.width / 2,
+          y: scottyLayout.y + scottyLayout.height / 2,
+        });
+      }
+
+      // Call context feedScotty
+      feedScotty(type === 'food' ? 'meal' : 'treat');
+    },
+    [foodCounts, scottyLayout, feedScotty]
+  );
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Hero Section */}
-      <View style={styles.heroSection}>
-        <View style={styles.speechBubble}>
-          <Text style={styles.speechText}>"Save some kibble for later!"</Text>
-          <View style={styles.speechTail} />
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          <View style={styles.speechBubble}>
+            <Text style={styles.speechText}>"Save some kibble for later!"</Text>
+            <View style={styles.speechTail} />
+          </View>
+
+          <View style={styles.heroContent}>
+            <View style={styles.dogContainer}>
+              <View
+                ref={scottyRef}
+                style={styles.scottyWrapper}
+                onLayout={handleScottyLayout}
+              >
+                <PixelScotty size={160} />
+              </View>
+            </View>
+
+            <View style={styles.categoryIcons}>
+              <DraggableFoodItem
+                emoji="☕"
+                count={foodCounts.coffee}
+                bgColor="#e1bee7"
+                scottyLayout={scottyLayout}
+                onFeed={() => handleFeed('coffee')}
+              />
+              <DraggableFoodItem
+                emoji="🍴"
+                count={foodCounts.food}
+                bgColor="#fff9c4"
+                scottyLayout={scottyLayout}
+                onFeed={() => handleFeed('food')}
+              />
+              <DraggableFoodItem
+                emoji="🐾"
+                count={foodCounts.pets}
+                bgColor="#c8e6c9"
+                scottyLayout={scottyLayout}
+                onFeed={() => handleFeed('pets')}
+              />
+            </View>
+          </View>
+
+          {/* Happiness Meter */}
+          <View style={styles.happinessContainer}>
+            <View style={styles.meterHeader}>
+              <Text style={styles.meterLabel}>SCOTTY HAPPINESS</Text>
+              <Text style={styles.meterValue}>82%</Text>
+            </View>
+            <View style={styles.meterContainer}>
+              <AnimatedLinearGradient
+                colors={['#ff6b6b', '#9b59b6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.meterFill, happinessAnimStyle]}
+              />
+            </View>
+          </View>
         </View>
 
-        <View style={styles.heroContent}>
-          <View style={styles.dogContainer}>
-            <View style={styles.scottyWrapper}>
-              <PixelScotty size={160} />
+        {/* Savings Goals Section */}
+        <View style={styles.section}>
+          <View style={styles.goalCard}>
+            <View style={styles.goalHeader}>
+              <View style={styles.goalIcon}>
+                <Text style={styles.goalIconText}>🍖</Text>
+              </View>
+              <Text style={styles.goalTitle}>JUICY MEAT FUND</Text>
             </View>
+            <Text style={styles.goalAmount}>$45 / $60</Text>
+            <AnimatedProgressBar
+              targetPercent={75}
+              color="#ff8a65"
+              delay={100}
+            />
           </View>
 
-          <View style={styles.categoryIcons}>
-            <View style={[styles.iconCard, styles.iconCardPurple]}>
-              <Text style={styles.iconEmoji}>☕</Text>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>1x</Text>
+          <View style={styles.goalCard}>
+            <View style={styles.goalHeader}>
+              <View style={[styles.goalIcon, styles.goalIconBlue]}>
+                <Text style={styles.goalIconText}>☕</Text>
               </View>
+              <Text style={styles.goalTitle}>BOBA RUN SAVINGS</Text>
             </View>
-            <View style={[styles.iconCard, styles.iconCardYellow]}>
-              <Text style={styles.iconEmoji}>🍴</Text>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>4x</Text>
-              </View>
-            </View>
-            <View style={[styles.iconCard, styles.iconCardGreen]}>
-              <Text style={styles.iconEmoji}>🐾</Text>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>3x</Text>
-              </View>
-            </View>
+            <Text style={styles.goalAmount}>$12 / $30</Text>
+            <AnimatedProgressBar
+              targetPercent={40}
+              color="#9b59b6"
+              delay={250}
+            />
           </View>
-        </View>
 
-        {/* Happiness Meter */}
-        <View style={styles.happinessContainer}>
-          <View style={styles.meterHeader}>
-            <Text style={styles.meterLabel}>SCOTTY HAPPINESS</Text>
-            <Text style={styles.meterValue}>82%</Text>
-          </View>
-          <View style={styles.meterContainer}>
-            <LinearGradient
-              colors={['#ff6b6b', '#9b59b6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.meterFill, { width: '82%' }]}
+          <View style={styles.goalCard}>
+            <View style={styles.goalHeader}>
+              <View style={[styles.goalIcon, styles.goalIconGreen]}>
+                <Text style={styles.goalIconText}>🍦</Text>
+              </View>
+              <Text style={styles.goalTitle}>ICE CREAM PARTY</Text>
+            </View>
+            <Text style={styles.goalAmount}>$24 / $25</Text>
+            <AnimatedProgressBar
+              targetPercent={96}
+              color="#81d4fa"
+              delay={400}
             />
           </View>
         </View>
-      </View>
 
-      {/* Savings Goals Section */}
-      <View style={styles.section}>
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <View style={styles.goalIcon}>
-              <Text style={styles.goalIconText}>🍖</Text>
-            </View>
-            <Text style={styles.goalTitle}>JUICY MEAT FUND</Text>
+        {/* Summary Cards */}
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>DAILY SPEND</Text>
+            <Text style={styles.summaryValueLarge}>$42.50</Text>
+            <AnimatedProgressBar
+              targetPercent={65}
+              color="#ff6b6b"
+              delay={500}
+              height={6}
+              small
+            />
           </View>
-          <Text style={styles.goalAmount}>$45 / $60</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressOrange, { width: '75%' }]} />
-          </View>
-        </View>
 
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <View style={[styles.goalIcon, styles.goalIconBlue]}>
-              <Text style={styles.goalIconText}>☕</Text>
-            </View>
-            <Text style={styles.goalTitle}>BOBA RUN SAVINGS</Text>
-          </View>
-          <Text style={styles.goalAmount}>$12 / $30</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressPurple, { width: '40%' }]} />
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>BANK TOTAL</Text>
+            <Text style={[styles.summaryValueLarge, styles.summaryValuePurple]}>$2,410</Text>
+            <Text style={styles.todayIncome}>↗ +$120 today</Text>
           </View>
         </View>
 
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <View style={[styles.goalIcon, styles.goalIconGreen]}>
-              <Text style={styles.goalIconText}>🍦</Text>
-            </View>
-            <Text style={styles.goalTitle}>ICE CREAM PARTY</Text>
-          </View>
-          <Text style={styles.goalAmount}>$24 / $25</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressBlue, { width: '96%' }]} />
-          </View>
-        </View>
-      </View>
-
-      {/* Summary Cards */}
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>DAILY SPEND</Text>
-          <Text style={styles.summaryValueLarge}>$42.50</Text>
-          <View style={styles.smallProgressBar}>
-            <View style={[styles.smallProgressFill, { width: '65%' }]} />
-          </View>
-        </View>
-
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>BANK TOTAL</Text>
-          <Text style={[styles.summaryValueLarge, styles.summaryValuePurple]}>$2,410</Text>
-          <Text style={styles.todayIncome}>↗ +$120 today</Text>
-        </View>
-      </View>
-
-      {/* Budget Dashboard */}
-      <View style={styles.budgetSection}>
-        <View style={styles.budgetHeader}>
-          <Text style={styles.budgetTitle}>BUDGET DASHBOARD</Text>
-          <TouchableOpacity>
-            <Text style={styles.settingsIcon}>⚙️</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.tabContainer}>
-          {(['Daily', 'Weekly', 'Monthly'] as const).map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              style={[
-                styles.tab,
-                activeBudgetTab === tab && styles.tabActive
-              ]}
-              onPress={() => setActiveBudgetTab(tab)}
-            >
-              <Text style={[
-                styles.tabText,
-                activeBudgetTab === tab && styles.tabTextActive
-              ]}>
-                {tab}
-              </Text>
+        {/* Budget Dashboard */}
+        <View style={styles.budgetSection}>
+          <View style={styles.budgetHeader}>
+            <Text style={styles.budgetTitle}>BUDGET DASHBOARD</Text>
+            <TouchableOpacity>
+              <Text style={styles.settingsIcon}>⚙️</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.tabContainer}>
+            {(['Daily', 'Weekly', 'Monthly'] as const).map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.tab,
+                  activeBudgetTab === tab && styles.tabActive
+                ]}
+                onPress={() => setActiveBudgetTab(tab)}
+              >
+                <Text style={[
+                  styles.tabText,
+                  activeBudgetTab === tab && styles.tabTextActive
+                ]}>
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {budgetsForActiveTab.map((budget, index) => (
+            <View key={budget.name} style={styles.budgetCard}>
+              <View style={styles.budgetCategoryHeader}>
+                <View style={styles.budgetCategoryLeft}>
+                  <Text style={styles.budgetEmoji}>{budget.emoji}</Text>
+                  <Text style={styles.budgetCategoryName}>{budget.name}</Text>
+                </View>
+                <Text style={styles.budgetCategoryAmount}>
+                  ${budget.spent.toFixed(2)} / ${budget.limit.toFixed(2)}
+                </Text>
+              </View>
+              <AnimatedProgressBar
+                targetPercent={budget.percent}
+                color={budget.color}
+                delay={600 + index * 150}
+              />
+              <Text
+                style={[
+                  styles.budgetProjection,
+                  budget.projection > 100 && styles.budgetProjectionWarning,
+                ]}
+              >
+                Projected End: {budget.projection}%
+              </Text>
+            </View>
           ))}
         </View>
+      </ScrollView>
 
-        <View style={styles.budgetCard}>
-          <View style={styles.budgetCategoryHeader}>
-            <View style={styles.budgetCategoryLeft}>
-              <Text style={styles.budgetEmoji}>🎭</Text>
-              <Text style={styles.budgetCategoryName}>Entertainment</Text>
-            </View>
-            <Text style={styles.budgetCategoryAmount}>$45.00 / $60.00</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressPurple, { width: '75%' }]} />
-          </View>
-          <Text style={styles.budgetProjection}>Projected End: 92%</Text>
+      {/* Heart burst overlay (above ScrollView) */}
+      {heartBurst && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <HeartBurst
+            x={heartBurst.x}
+            y={heartBurst.y}
+            onFinish={() => setHeartBurst(null)}
+          />
         </View>
-
-        <View style={styles.budgetCard}>
-          <View style={styles.budgetCategoryHeader}>
-            <View style={styles.budgetCategoryLeft}>
-              <Text style={styles.budgetEmoji}>🍔</Text>
-              <Text style={styles.budgetCategoryName}>Dining Out</Text>
-            </View>
-            <Text style={styles.budgetCategoryAmount}>$112.00 / $120.00</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressOrange, { width: '93%' }]} />
-          </View>
-          <Text style={[styles.budgetProjection, styles.budgetProjectionWarning]}>Projected End: 115%</Text>
-        </View>
-
-        <View style={styles.budgetCard}>
-          <View style={styles.budgetCategoryHeader}>
-            <View style={styles.budgetCategoryLeft}>
-              <Text style={styles.budgetEmoji}>🛍️</Text>
-              <Text style={styles.budgetCategoryName}>Shopping</Text>
-            </View>
-            <Text style={styles.budgetCategoryAmount}>$20.00 / $150.00</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressBlue, { width: '15%' }]} />
-          </View>
-          <Text style={styles.budgetProjection}>Projected End: 40%</Text>
-        </View>
-      </View>
-    </ScrollView>
+      )}
+    </View>
   );
 }
 
@@ -299,51 +477,6 @@ const styles = StyleSheet.create({
   },
   categoryIcons: {
     gap: 12,
-  },
-  iconCard: {
-    width: 56,
-    height: 56,
-    backgroundColor: '#e1bee7',
-    borderWidth: 2,
-    borderColor: '#000',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
-  },
-  iconCardYellow: {
-    backgroundColor: '#fff9c4',
-  },
-  iconCardPurple: {
-    backgroundColor: '#e1bee7',
-  },
-  iconCardGreen: {
-    backgroundColor: '#c8e6c9',
-  },
-  iconEmoji: {
-    fontSize: 24,
-  },
-  badge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#ff6b6b',
-    borderWidth: 1,
-    borderColor: '#000',
-    borderRadius: 10,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  badgeText: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#fff',
   },
 
   // Happiness Meter
@@ -447,26 +580,6 @@ const styles = StyleSheet.create({
     top: 16,
     right: 16,
   },
-  progressBar: {
-    height: 20,
-    backgroundColor: '#ffece6',
-    borderWidth: 2,
-    borderColor: '#000',
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-  },
-  progressOrange: {
-    backgroundColor: '#ff8a65',
-  },
-  progressPurple: {
-    backgroundColor: '#9b59b6',
-  },
-  progressBlue: {
-    backgroundColor: '#81d4fa',
-  },
 
   // Summary Cards
   summaryRow: {
@@ -506,18 +619,6 @@ const styles = StyleSheet.create({
   },
   summaryValuePurple: {
     color: '#9b59b6',
-  },
-  smallProgressBar: {
-    height: 6,
-    backgroundColor: '#ffece6',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginTop: 12,
-  },
-  smallProgressFill: {
-    height: '100%',
-    backgroundColor: '#ff6b6b',
-    borderRadius: 3,
   },
   todayIncome: {
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',

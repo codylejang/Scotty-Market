@@ -57,7 +57,7 @@ export default function TabLayout() {
         name="feed"
         options={{
           title: 'Graph',
-          headerTitle: 'Your Finances',
+          headerShown: false,
           tabBarIcon: ({ focused }) => <TabBarIcon name="graph" focused={focused} />,
         }}
       />
