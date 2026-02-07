@@ -194,19 +194,27 @@ export function SpendingChart({ spending, budget, transactions = [], balance = 2
         <View style={styles.trendChart}>
           {savingsData.map((value, i) => (
             <View key={i} style={styles.trendBarWrapper}>
-              <View
-                style={[
-                  styles.trendBar,
-                  {
-                    height: `${(value / maxSavings) * 100}%`,
-                    backgroundColor: i === savingsData.length - 1
-                      ? '#9b59b6'
-                      : i >= savingsData.length - 2
-                      ? '#f8bbd0'
-                      : '#ffece6',
-                  },
-                ]}
-              />
+              {i === savingsData.length - 1 ? (
+                <View
+                  style={[
+                    styles.trendBar,
+                    styles.trendBarPredicted,
+                    { height: `${(value / maxSavings) * 100}%` },
+                  ]}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.trendBar,
+                    {
+                      height: `${(value / maxSavings) * 100}%`,
+                      backgroundColor: i >= savingsData.length - 2
+                        ? '#f8bbd0'
+                        : '#ffece6',
+                    },
+                  ]}
+                />
+              )}
               <Text style={styles.trendLabel}>{months[i]}</Text>
             </View>
           ))}
@@ -549,6 +557,12 @@ const styles = StyleSheet.create({
     width: 28,
     borderRadius: 6,
     borderWidth: 2,
+  trendBarPredicted: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#9b59b6',
+    borderStyle: 'dashed',
+  },
     borderColor: '#000',
     minHeight: 12,
   },

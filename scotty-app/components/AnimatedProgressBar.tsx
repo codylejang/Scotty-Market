@@ -19,6 +19,8 @@ interface AnimatedProgressBarProps {
   height?: number;
   /** Whether this is a "small" bar (no border) */
   small?: boolean;
+  /** Change to retrigger the animation */
+  animationKey?: string | number;
 }
 
 export default function AnimatedProgressBar({
@@ -27,10 +29,12 @@ export default function AnimatedProgressBar({
   delay = 0,
   height = 20,
   small = false,
+  animationKey,
 }: AnimatedProgressBarProps) {
   const widthPercent = useSharedValue(0);
 
   useEffect(() => {
+    widthPercent.value = 0;
     widthPercent.value = withDelay(
       delay,
       withTiming(targetPercent, {
@@ -38,7 +42,7 @@ export default function AnimatedProgressBar({
         easing: Easing.out(Easing.cubic),
       })
     );
-  }, [targetPercent, delay]);
+  }, [targetPercent, delay, animationKey]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     width: `${widthPercent.value}%`,

@@ -28,8 +28,20 @@ import { Quest } from '../types';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
+type BudgetTab = 'Daily' | 'Monthly' | 'Yearly';
+
+const BUDGET_TABS: BudgetTab[] = ['Daily', 'Monthly', 'Yearly'];
+
 // Budget data indexed by tab
-const budgetsByTab = {
+const budgetsByTab: Record<BudgetTab, Array<{
+  emoji: string;
+  name: string;
+  spent: number;
+  limit: number;
+  percent: number;
+  projection: number;
+  color: string;
+}>> = {
   Daily: [
     {
       emoji: '🎭',
@@ -56,35 +68,6 @@ const budgetsByTab = {
       limit: 150.00,
       percent: 15,
       projection: 40,
-      color: '#81d4fa',
-    },
-  ],
-  Weekly: [
-    {
-      emoji: '🎬',
-      name: 'Entertainment',
-      spent: 180.00,
-      limit: 250.00,
-      percent: 72,
-      projection: 88,
-      color: '#9b59b6',
-    },
-    {
-      emoji: '🍕',
-      name: 'Dining Out',
-      spent: 420.00,
-      limit: 500.00,
-      percent: 84,
-      projection: 98,
-      color: '#ff8a65',
-    },
-    {
-      emoji: '🎮',
-      name: 'Gaming',
-      spent: 50.00,
-      limit: 100.00,
-      percent: 50,
-      projection: 65,
       color: '#81d4fa',
     },
   ],
@@ -117,6 +100,35 @@ const budgetsByTab = {
       color: '#81d4fa',
     },
   ],
+  Yearly: [
+    {
+      emoji: '🏡',
+      name: 'Housing',
+      spent: 14400.00,
+      limit: 18000.00,
+      percent: 80,
+      projection: 80,
+      color: '#9b59b6',
+    },
+    {
+      emoji: '🚘',
+      name: 'Transportation',
+      spent: 3600.00,
+      limit: 4800.00,
+      percent: 75,
+      projection: 85,
+      color: '#ff8a65',
+    },
+    {
+      emoji: '💳',
+      name: 'Subscriptions',
+      spent: 1068.00,
+      limit: 1800.00,
+      percent: 59,
+      projection: 70,
+      color: '#81d4fa',
+    },
+  ],
 };
 
 interface ScottyHomeScreenProps {
@@ -131,10 +143,9 @@ export default function ScottyHomeScreen({
   onOpenQuestsModal,
 }: ScottyHomeScreenProps = {}) {
   const { feedScotty } = useApp();
-  const [activeBudgetTab, setActiveBudgetTab] = useState<'Daily' | 'Weekly' | 'Monthly'>('Daily');
-
-  // Get budgets for the active tab
-  const budgetsForActiveTab = budgetsByTab[activeBudgetTab];
+  const [activeBudgetTab, setActiveBudgetTab] = useState<BudgetTab>('Daily');
+  const budgetPagerRef = useRef<ScrollView>(null);
+  const [budgetPagerWidth, setBudgetPagerWidth] = useState(0);
 
   // Food counts
   const [foodCounts, setFoodCounts] = useState({ coffee: 1, food: 4, pets: 3 });
@@ -224,6 +235,23 @@ export default function ScottyHomeScreen({
     [foodCounts, scottyLayout, feedScotty]
   );
 
+  const handleBudgetTabPress = useCallback((tab: BudgetTab) => {
+    const index = BUDGET_TABS.indexOf(tab);
+    if (index >= 0 && budgetPagerWidth > 0) {
+      budgetPagerRef.current?.scrollTo({ x: index * budgetPagerWidth, animated: true });
+    }
+    setActiveBudgetTab(tab);
+  }, [budgetPagerWidth]);
+
+  const handleBudgetSwipeEnd = useCallback((offsetX: number) => {
+    if (!budgetPagerWidth) return;
+    const index = Math.round(offsetX / budgetPagerWidth);
+    const nextTab = BUDGET_TABS[index];
+    if (nextTab && nextTab !== activeBudgetTab) {
+      setActiveBudgetTab(nextTab);
+    }
+  }, [activeBudgetTab, budgetPagerWidth]);
+
   return (
     <View style={{ flex: 1 }}>
       <ScrollView
@@ -295,9 +323,9 @@ export default function ScottyHomeScreen({
           </View>
         </View>
 
-        {/* Savings Goals Section */}
+        {/* Daily Quests Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeaderTitle}>SAVINGS GOALS</Text>
+          <Text style={styles.sectionHeaderTitle}>DAILY QUESTS</Text>
 
           <View style={styles.goalCard}>
             <View style={styles.goalHeader}>
@@ -376,14 +404,14 @@ export default function ScottyHomeScreen({
           </View>
 
           <View style={styles.tabContainer}>
-            {(['Daily', 'Weekly', 'Monthly'] as const).map((tab) => (
+            {BUDGET_TABS.map((tab) => (
               <TouchableOpacity
                 key={tab}
                 style={[
                   styles.tab,
                   activeBudgetTab === tab && styles.tabActive
                 ]}
-                onPress={() => setActiveBudgetTab(tab)}
+                onPress={() => handleBudgetTabPress(tab)}
               >
                 <Text style={[
                   styles.tabText,
@@ -394,33 +422,62 @@ export default function ScottyHomeScreen({
               </TouchableOpacity>
             ))}
           </View>
-
-          {budgetsForActiveTab.map((budget, index) => (
-            <View key={budget.name} style={styles.budgetCard}>
-              <View style={styles.budgetCategoryHeader}>
-                <View style={styles.budgetCategoryLeft}>
-                  <Text style={styles.budgetEmoji}>{budget.emoji}</Text>
-                  <Text style={styles.budgetCategoryName}>{budget.name}</Text>
-                </View>
-                <Text style={styles.budgetCategoryAmount}>
-                  ${budget.spent.toFixed(2)} / ${budget.limit.toFixed(2)}
-                </Text>
-              </View>
-              <AnimatedProgressBar
-                targetPercent={budget.percent}
-                color={budget.color}
-                delay={600 + index * 150}
-              />
-              <Text
+          <ScrollView
+            ref={budgetPagerRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(event) => handleBudgetSwipeEnd(event.nativeEvent.contentOffset.x)}
+            onLayout={(event) => {
+              const width = Math.max(0, event.nativeEvent.layout.width);
+              if (width !== budgetPagerWidth) {
+                setBudgetPagerWidth(width);
+              }
+            }}
+            contentContainerStyle={styles.budgetPagerContent}
+          >
+            {BUDGET_TABS.map((tab) => (
+              <View
+                key={tab}
                 style={[
-                  styles.budgetProjection,
-                  budget.projection > 100 && styles.budgetProjectionWarning,
+                  styles.budgetPage,
+                  budgetPagerWidth > 0 && { width: budgetPagerWidth },
                 ]}
               >
-                Projected End: {budget.projection}%
-              </Text>
-            </View>
-          ))}
+                {budgetsByTab[tab].map((budget, index) => (
+                  <View key={budget.name} style={styles.budgetCard}>
+                    <View style={styles.budgetCategoryHeader}>
+                      <View style={styles.budgetCategoryLeft}>
+                        <Text style={styles.budgetEmoji}>{budget.emoji}</Text>
+                        <Text style={styles.budgetCategoryName}>{budget.name}</Text>
+                      </View>
+                      <Text style={styles.budgetCategoryAmount}>
+                        ${budget.spent.toFixed(2)} / ${budget.limit.toFixed(2)}
+                      </Text>
+                    </View>
+                    <AnimatedProgressBar
+                      targetPercent={budget.percent}
+                      color={budget.color}
+                      delay={600 + index * 150}
+                      animationKey={
+                        tab === activeBudgetTab
+                          ? `active-${activeBudgetTab}`
+                          : `inactive-${tab}`
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.budgetProjection,
+                        budget.projection > 100 && styles.budgetProjectionWarning,
+                      ]}
+                    >
+                      Projected End: {budget.projection}%
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
         </View>
       </ScrollView>
 
@@ -722,6 +779,12 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#fff',
+  },
+  budgetPagerContent: {
+    flexGrow: 1,
+  },
+  budgetPage: {
+    paddingBottom: 8,
   },
   budgetCard: {
     marginBottom: 24,
