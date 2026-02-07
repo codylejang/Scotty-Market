@@ -8,6 +8,7 @@ import {
   FoodType,
   BudgetItem,
   AccountInfo,
+  Quest,
 } from '../types';
 
 // Configure this to point to your backend
@@ -405,5 +406,55 @@ export async function checkBackendHealth(): Promise<boolean> {
       console.warn(`[API] Health check failed: ${error.message} (target: ${API_BASE_URL})`);
     }
     return false;
+  }
+}
+
+/**
+ * Fetch daily quests for the user.
+ * These quests are personalized based on user's goals and spending patterns.
+ */
+export async function fetchDailyQuests(userId: string = DEFAULT_USER_ID): Promise<Quest[]> {
+  try {
+    const quests = await apiFetch<Quest[]>(`/users/${userId}/quests`);
+    return quests;
+  } catch (error) {
+    console.log('Failed to fetch quests from API:', error);
+    // Return empty array on failure - component will use local mock data
+    throw error;
+  }
+}
+
+/**
+ * Update quest progress.
+ */
+export async function updateQuestProgress(
+  questId: string,
+  progress: number,
+  userId: string = DEFAULT_USER_ID
+): Promise<Quest> {
+  try {
+    const quest = await apiFetch<Quest>(`/users/${userId}/quests/${questId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ progress }),
+    });
+    return quest;
+  } catch (error) {
+    console.error('Failed to update quest progress:', error);
+    throw error;
+  }
+}
+
+/**
+ * Refresh/generate new daily quests.
+ */
+export async function refreshDailyQuests(userId: string = DEFAULT_USER_ID): Promise<Quest[]> {
+  try {
+    const quests = await apiFetch<Quest[]>(`/users/${userId}/quests/refresh`, {
+      method: 'POST',
+    });
+    return quests;
+  } catch (error) {
+    console.error('Failed to refresh quests:', error);
+    throw error;
   }
 }
