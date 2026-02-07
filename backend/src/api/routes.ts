@@ -3,13 +3,13 @@ import { Orchestrator } from '../orchestrator';
 import { AgentRunner } from '../agents/runner';
 import { Adapters } from '../adapters';
 import { evaluateQuest, evaluateUserQuests } from '../services/quest-evaluation';
-import { getUpcomingSubscriptions, detectRecurringCandidates } from '../services/subscription-analysis';
+import { getUpcomingSubscriptions, detectRecurringCandidates, upsertRecurringCandidates } from '../services/subscription-analysis';
 import { computeHealthMetrics } from '../services/health-metrics';
 import { searchTransactions, getTransactionById, listTransactionStats, detectAnomalies, DetectAnomaliesInput } from '../services/retrieval';
 import { buildDualSummary } from '../services/financial-summary';
 import { resetAndSeedNessieDummyData, getTransactionHistory, inferNessieCategory } from '../services/nessie';
 import { runFullSeed } from '../db/seed';
-import { listBudgets, createBudget, updateBudget, validateBudgetInput, BudgetFrequency } from '../services/budget';
+import { listBudgets, createBudget, updateBudget, validateBudgetInput, BudgetFrequency, computeProjections } from '../services/budget';
 import { getDb } from '../db/database';
 import { TransactionSchema } from '../schemas';
 import { z } from 'zod';
@@ -131,7 +131,8 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
            FROM budget b
            LEFT JOIN transaction_ t
              ON t.user_id = b.user_id
-            AND t.category_primary = b.category
+            AND (t.category_primary = b.category
+                 OR (b.category = 'Food & Drink' AND t.category_primary = 'Groceries'))
             AND t.date BETWEEN ? AND ?
             AND t.pending = 0
            WHERE b.user_id = ?
@@ -340,6 +341,18 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
       const budget = updateBudget(req.params.id as string, updates);
       if (!budget) return res.status(404).json({ error: 'Budget not found' });
       res.json(budget);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /v1/budget/projections ───
+  router.get('/v1/budget/projections', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.user_id as string;
+      if (!userId) return res.status(400).json({ error: 'user_id required' });
+      const result = computeProjections(userId);
+      res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -665,7 +678,16 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
       if (!userId) return res.status(400).json({ error: 'user_id required' });
 
       const daysAhead = parseInt(req.query.days_ahead as string || '30');
-      const subs = getUpcomingSubscriptions(userId, daysAhead);
+      let subs = getUpcomingSubscriptions(userId, daysAhead);
+
+      // If no recurring candidates in DB, detect them on-the-fly and persist
+      if (subs.length === 0) {
+        const candidates = detectRecurringCandidates(userId, 180);
+        if (candidates.length > 0) {
+          upsertRecurringCandidates(candidates);
+          subs = getUpcomingSubscriptions(userId, daysAhead);
+        }
+      }
 
       const today = new Date().toISOString().split('T')[0];
       const billDays = subs
