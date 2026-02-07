@@ -21,6 +21,10 @@ try {
 }
 
 const PORT = parseInt(process.env.PORT || '3001');
+const NESSIE_SYNC_INTERVAL_MINUTES = Math.max(
+  1,
+  Math.min(59, parseInt(process.env.NESSIE_SYNC_INTERVAL_MINUTES || '30', 10) || 30)
+);
 
 // Ensure data directory exists
 const dataDir = path.join(__dirname, '../data');
@@ -79,6 +83,25 @@ app.use('/api', createRouter(adapters, runner));
 const orchestrator = new Orchestrator(adapters, runner);
 
 if (process.env.ENABLE_CRON !== 'false') {
+  if (process.env.NESSIE_API_KEY) {
+    const syncSchedule = `*/${NESSIE_SYNC_INTERVAL_MINUTES} * * * *`;
+    cron.schedule(syncSchedule, async () => {
+      console.log(`[cron] Running Nessie sync for all users (every ${NESSIE_SYNC_INTERVAL_MINUTES} min)...`);
+      try {
+        const users = db.prepare('SELECT id FROM user_profile').all() as { id: string }[];
+        for (const user of users) {
+          await adapters.bank.syncTransactions(user.id);
+        }
+        console.log(`[cron] Nessie sync complete for ${users.length} users`);
+      } catch (err) {
+        console.error('[cron] Nessie sync failed:', err);
+      }
+    });
+    console.log(`Nessie sync cron scheduled (${syncSchedule}).`);
+  } else {
+    console.log('NESSIE_API_KEY not set — skipping Nessie sync cron.');
+  }
+
   cron.schedule('0 5 * * *', async () => {
     console.log('[cron] Running daily digest for all users...');
     try {

@@ -7,7 +7,6 @@ import {
   DailyInsight,
   FoodType,
 } from '../types';
-import { getTransactionHistory, resetAndSeedNessieDummyData } from './nessie';
 
 // Configure this to point to your backend
 // 
@@ -154,32 +153,6 @@ interface BackendTransaction {
   pending: boolean;
 }
 
-function mapNessieCategory(type: string, description: string): TransactionCategory {
-  const text = `${type} ${description}`.toLowerCase();
-
-  if (text.includes('grocer')) return 'groceries';
-  if (text.includes('dining') || text.includes('restaurant') || text.includes('cafe')) {
-    return 'food_dining';
-  }
-  if (text.includes('travel') || text.includes('rideshare') || text.includes('train')) {
-    return 'transport';
-  }
-  if (text.includes('fun') || text.includes('movie') || text.includes('concert')) {
-    return 'entertainment';
-  }
-  if (text.includes('shopping') || text.includes('store') || text.includes('gift')) {
-    return 'shopping';
-  }
-  if (text.includes('self-care') || text.includes('wellness') || text.includes('pharmacy')) {
-    return 'health';
-  }
-  if (type.toLowerCase().includes('deposit') || type.toLowerCase().includes('transfer')) {
-    return 'other';
-  }
-
-  return mapCategory(type);
-}
-
 function mapTransaction(bt: BackendTransaction): Transaction {
   return {
     id: bt.id,
@@ -194,22 +167,6 @@ function mapTransaction(bt: BackendTransaction): Transaction {
 // ─── Public API Functions ───
 
 export async function fetchTransactions(days: number = 30): Promise<Transaction[]> {
-  if (process.env.EXPO_PUBLIC_USE_NESSIE === 'true') {
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(endDate.getDate() - days);
-
-    const nessieTransactions = await getTransactionHistory(startDate, endDate);
-    return nessieTransactions.map((tx) => ({
-      id: tx._id,
-      amount: Math.abs(tx.amount), // Frontend currently expects absolute amounts
-      category: mapNessieCategory(tx.type, tx.description || ''),
-      merchant: tx.description || tx.type,
-      date: new Date(tx.date),
-      isSubscription: tx.type.toLowerCase().includes('subscription'),
-    }));
-  }
-
   const data = await apiFetch<BackendTransaction[]>(
     `/v1/transactions?user_id=${DEFAULT_USER_ID}&days=${days}&include_pending=true`
   );
@@ -217,7 +174,10 @@ export async function fetchTransactions(days: number = 30): Promise<Transaction[
 }
 
 export async function seedNessieSandboxData() {
-  return resetAndSeedNessieDummyData();
+  return apiFetch<{ customerIds: string[]; accountIds: string[]; transactionsCreated: number }>(
+    '/v1/admin/nessie/seed',
+    { method: 'POST' }
+  );
 }
 
 export interface DailyPayload {

@@ -149,4 +149,23 @@ export const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 2,
+    name: 'bank_sync_state',
+    sql: `
+      CREATE TABLE IF NOT EXISTS bank_sync_state (
+        user_id TEXT NOT NULL REFERENCES user_profile(id),
+        provider TEXT NOT NULL,
+        cursor TEXT,
+        last_sync_at TEXT,
+        last_error TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY(user_id, provider)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_bank_sync_provider_time
+      ON bank_sync_state(provider, last_sync_at);
+    `,
+  },
 ];
