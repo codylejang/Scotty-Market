@@ -6,3 +6,4 @@ export { default as InsightBubble } from './InsightBubble';
 export { default as TransactionList } from './TransactionList';
 export { default as SpendingChart } from './SpendingChart';
 export { FoodButton, FoodSelector } from './FoodButton';
+export { default as ScottyQuestsModal } from './ScottyQuestsModal';

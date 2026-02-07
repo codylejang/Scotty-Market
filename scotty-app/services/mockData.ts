@@ -1,5 +1,4 @@
-import seedSuite from '../data/nessie-seed-transactions.json';
-import { Transaction, TransactionCategory, Achievement, UserProfile } from '../types';
+import { Transaction, TransactionCategory, Achievement, UserProfile, Quest } from '../types';
 
 type SeedTransactionKind = 'purchase' | 'deposit' | 'withdrawal' | 'transfer';
 
@@ -189,4 +188,63 @@ export function getTotalSpending(transactions: Transaction[], days: number = 30)
   return transactions
     .filter((t) => t.date >= cutoff)
     .reduce((sum, t) => sum + t.amount, 0);
+}
+
+// Generate quests that tie to user's savings goals
+export function generateDailyQuests(): Quest[] {
+  return [
+    {
+      id: generateId(),
+      title: 'Save $10 on dining',
+      subtitle: 'Meat Treat',
+      emoji: '🍖',
+      xpReward: 50,
+      progress: 2,
+      goal: 5,
+      progressUnit: 'days',
+      bgColor: '#ffb3ba',
+      goalTarget: 'Juicy Meat Fund',
+    },
+    {
+      id: generateId(),
+      title: 'Skip 1 boba run',
+      subtitle: 'Sugar Free',
+      emoji: '🧋',
+      xpReward: 30,
+      progress: 0,
+      goal: 1,
+      progressUnit: 'skips',
+      bgColor: '#fff9c4',
+      goalTarget: 'Boba Run Savings',
+    },
+    {
+      id: generateId(),
+      title: 'Drink water',
+      subtitle: 'Daily Hydration',
+      emoji: '💧',
+      xpReward: 10,
+      progress: 6,
+      goal: 8,
+      progressUnit: 'cups',
+      bgColor: '#bae1ff',
+    },
+    {
+      id: generateId(),
+      title: 'Buy Bulk Kibble',
+      subtitle: 'Big Savings',
+      emoji: '🦴',
+      xpReward: 100,
+      progress: 0,
+      goal: 1,
+      progressUnit: 'pack',
+      bgColor: '#baffc9',
+      goalTarget: 'Ice Cream Party',
+    },
+  ];
+}
+
+// Get quests for specific goals
+export function getQuestsForGoal(goalName: string, transactions: Transaction[]): Quest[] {
+  const allQuests = generateDailyQuests();
+  return allQuests.filter(q => q.goalTarget === goalName);
 }

@@ -38,26 +38,13 @@ export default function TabLayout() {
           title: 'Home',
           headerTitle: "Scotty's Home",
           tabBarIcon: ({ focused }) => <TabBarIcon name="home" focused={focused} />,
-          headerRight: () => (
-            <View style={styles.badgeButton}>
-              <Text style={styles.badgeIcon}>🏆</Text>
-              <Text style={styles.badgeText}>Badges</Text>
-            </View>
-          ),
-          headerLeft: () => (
-            <View style={styles.profileContainer}>
-              <View style={styles.profileAvatar}>
-                <Text style={styles.profileEmoji}>🐕</Text>
-              </View>
-            </View>
-          ),
         }}
       />
       <Tabs.Screen
         name="feed"
         options={{
           title: 'Graph',
-          headerTitle: 'Your Finances',
+          headerShown: false,
           tabBarIcon: ({ focused }) => <TabBarIcon name="graph" focused={focused} />,
         }}
       />
