@@ -10,6 +10,7 @@ import {
   AccountInfo,
   Quest,
   UserProfile,
+  ChatAction,
 } from '../types';
 
 // Configure this to point to your backend
@@ -282,8 +283,8 @@ export async function feedScottyAPI(foodType: FoodType): Promise<ScottyState> {
   };
 }
 
-export async function sendChatMessageAPI(message: string): Promise<string> {
-  const data = await apiFetch<{ response: string; actions?: any[] }>('/v1/chat', {
+export async function sendChatMessageAPI(message: string): Promise<{ response: string; actions: ChatAction[] }> {
+  const data = await apiFetch<{ response: string; actions?: any[]; suggested_actions?: ChatAction[] }>('/v1/chat', {
     method: 'POST',
     body: JSON.stringify({
       user_id: DEFAULT_USER_ID,
@@ -291,7 +292,18 @@ export async function sendChatMessageAPI(message: string): Promise<string> {
     }),
   });
 
-  return data.response;
+  return { response: data.response, actions: data.suggested_actions || [] };
+}
+
+export async function fetchChatSuggestedActions(): Promise<ChatAction[]> {
+  try {
+    const data = await apiFetch<{ actions: ChatAction[] }>(
+      `/v1/chat/suggested-actions?user_id=${DEFAULT_USER_ID}`
+    );
+    return data.actions || [];
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchActiveQuest(): Promise<Achievement | null> {

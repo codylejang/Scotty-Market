@@ -53,8 +53,7 @@ export default function TabLayout() {
         name="chat"
         options={{
           title: 'Chat',
-          headerTitle: 'CHAT WITH SCOTTY',
-          headerTitleAlign: 'left',
+          headerShown: false,
           tabBarIcon: ({ focused }) => <TabBarIcon name="chat" focused={focused} />,
           tabBarBadge: '',
           tabBarBadgeStyle: styles.chatBadge,

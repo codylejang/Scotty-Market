@@ -5,7 +5,8 @@ import { Adapters } from '../adapters';
 import { evaluateQuest, evaluateUserQuests } from '../services/quest-evaluation';
 import { getUpcomingSubscriptions, detectRecurringCandidates } from '../services/subscription-analysis';
 import { computeHealthMetrics } from '../services/health-metrics';
-import { searchTransactions, getTransactionById, listTransactionStats, detectAnomalies } from '../services/retrieval';
+import { searchTransactions, getTransactionById, listTransactionStats, detectAnomalies, DetectAnomaliesInput } from '../services/retrieval';
+import { buildDualSummary } from '../services/financial-summary';
 import { resetAndSeedNessieDummyData, getTransactionHistory, inferNessieCategory } from '../services/nessie';
 import { listBudgets, createBudget, updateBudget, validateBudgetInput, BudgetFrequency } from '../services/budget';
 import { getDb } from '../db/database';
@@ -802,6 +803,18 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
     }
   });
 
+  // ─── GET /v1/chat/suggested-actions ───
+  router.get('/v1/chat/suggested-actions', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.user_id as string || 'user_1';
+      const { summary7d, summary30d } = buildDualSummary(userId);
+      const actions = runner.buildSuggestedActionsPublic(summary7d, summary30d);
+      res.json({ actions });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ─── POST /v1/chat ───
   router.post('/v1/chat', async (req: Request, res: Response) => {
     try {
@@ -811,8 +824,12 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
       }
 
       const { output } = await runner.generateChatResponse(user_id, message);
-      // Frontend expects { response: string, actions?: any[] }
-      res.json({ response: output.message, actions: output.recommended_actions });
+      // Frontend expects { response: string, actions?: any[], suggested_actions?: any[] }
+      res.json({
+        response: output.message,
+        actions: output.recommended_actions,
+        suggested_actions: output.suggested_actions || [],
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

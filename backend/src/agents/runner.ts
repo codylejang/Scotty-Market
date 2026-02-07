@@ -2,7 +2,7 @@ import { v4 as uuid } from 'uuid';
 import { z } from 'zod';
 import { getDb } from '../db/database';
 import { TOOLS, ToolContext, ToolDefinition } from './tools';
-import { DailyDigestOutput, ChatResponseOutput, TriggerType } from '../schemas';
+import { DailyDigestOutput, ChatResponseOutput, TriggerType, ChatSuggestedAction } from '../schemas';
 import { Adapters } from '../adapters';
 import { buildDualSummary } from '../services/financial-summary';
 import { searchTransactions, detectAnomalies } from '../services/retrieval';
@@ -567,17 +567,83 @@ Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise 
     };
   }
 
+  private buildFallbackSuggestedActions(
+    summary7d: any,
+    summary30d: any,
+    userMessage?: string
+  ): ChatSuggestedAction[] {
+    const actions: ChatSuggestedAction[] = [];
+    const categories = Object.entries(summary7d.by_category as Record<string, number>)
+      .sort(([, a], [, b]) => b - a);
+    const topCat = categories[0];
+
+    // Action based on top spending category
+    if (topCat) {
+      actions.push({
+        id: `sa_topcat_${Date.now()}`,
+        label: `${topCat[0]} Breakdown`,
+        icon: 'receipt',
+        category: 'spending',
+        prompt: `Show me a breakdown of my ${topCat[0]} spending this week`,
+      });
+    }
+
+    // Budget-related action
+    actions.push({
+      id: `sa_budget_${Date.now()}`,
+      label: 'Budget Check',
+      icon: 'wallet',
+      category: 'budget',
+      prompt: 'How am I doing against my budgets this month?',
+    });
+
+    // Savings/goal action
+    actions.push({
+      id: `sa_save_${Date.now()}`,
+      label: 'Savings Tips',
+      icon: 'savings',
+      category: 'goal',
+      prompt: 'What are some ways I can save more money this week?',
+    });
+
+    // Spending trend action
+    if (summary30d.total_spent > 0) {
+      actions.push({
+        id: `sa_trend_${Date.now()}`,
+        label: 'Spending Trend',
+        icon: 'chart',
+        category: 'finances',
+        prompt: 'How does my spending this week compare to last month?',
+      });
+    }
+
+    // Anomaly action if spending is high
+    if (summary7d.total_spent > summary30d.total_spent / 3) {
+      actions.push({
+        id: `sa_alert_${Date.now()}`,
+        label: 'Spending Alert',
+        icon: 'alert',
+        category: 'spending',
+        prompt: 'Am I spending more than usual? Show me any unusual charges.',
+      });
+    }
+
+    return actions.slice(0, 4);
+  }
+
   private generateFallbackChat(
     userMessage: string,
     summary7d: any,
     summary30d: any
   ): ChatResponseOutput {
     const msg = userMessage.toLowerCase();
+    const suggested_actions = this.buildFallbackSuggestedActions(summary7d, summary30d, userMessage);
 
     if (msg.includes('how') && (msg.includes('doing') || msg.includes('am i'))) {
       return {
         message: `Woof! Here's your snapshot: You've spent $${summary7d.total_spent.toFixed(2)} this week and $${summary30d.total_spent.toFixed(2)} this month. ${summary7d.total_spent < summary30d.total_spent / 4 ? 'You\'re doing great — on track!' : 'Let\'s keep an eye on that spending together!'}`,
         recommended_actions: [],
+        suggested_actions,
       };
     }
 
@@ -589,6 +655,7 @@ Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise 
           ? `Your biggest spending area is ${topCat[0]} at $${(topCat[1] as number).toFixed(2)} this week. Want me to set a quest to cut back?`
           : `You're doing well! I don't see any big spending spikes to worry about right now.`,
         recommended_actions: [],
+        suggested_actions,
       };
     }
 
@@ -598,12 +665,14 @@ Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise 
       return {
         message: `Your top expenses this week: ${list || 'No transactions yet!'}`,
         recommended_actions: [],
+        suggested_actions,
       };
     }
 
     return {
       message: `Woof! I'm Scotty, your financial buddy. This week you've spent $${summary7d.total_spent.toFixed(2)}. Ask me about your spending, savings goals, or subscriptions!`,
       recommended_actions: [],
+      suggested_actions,
     };
   }
 
@@ -800,7 +869,17 @@ const CHAT_SYSTEM_PROMPT = `You are Scotty, a friendly Scottish Terrier financia
 Respond as valid JSON with this exact structure:
 {
   "message": "your response message (max 1000 chars)",
-  "recommended_actions": []
+  "recommended_actions": [],
+  "suggested_actions": [
+    {
+      "id": "unique_id",
+      "label": "short label (max 30 chars)",
+      "icon": "wallet" | "savings" | "trophy" | "receipt" | "alert" | "chart",
+      "category": "finances" | "budget" | "goal" | "spending",
+      "prompt": "the message to send when user taps this action (max 200 chars)",
+      "description": "optional short description (max 80 chars)"
+    }
+  ]
 }
 
 IMPORTANT: recommended_actions must be an empty array [] or an array of objects with this structure:
@@ -811,6 +890,8 @@ IMPORTANT: recommended_actions must be an empty array [] or an array of objects 
     "requires_approval": false
   }
 ]
+
+Generate 2-4 suggested_actions that are contextual follow-up actions based on the conversation and financial data. Each action should help the user explore their finances further. Pick relevant icons and categories.
 
 Do NOT put strings in recommended_actions. Use an empty array [] if you have no structured actions to recommend.
 
