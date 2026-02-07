@@ -10,6 +10,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
+    "test:nessie": "tsc --module commonjs --target es2020 --moduleResolution node --esModuleInterop --resolveJsonModule --skipLibCheck --outDir .tmp-nessie scripts/test-nessie.ts services/nessie.ts data/nessie-seed-transactions.json && node --env-file=.env .tmp-nessie/scripts/test-nessie.js"
   },
   "dependencies": {
     "@expo-google-fonts/caveat": "^0.4.2",
