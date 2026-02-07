@@ -28,7 +28,7 @@ function parseArgs() {
 
   const today = new Date();
   const startDefault = new Date();
-  startDefault.setDate(today.getDate() - 30);
+  startDefault.setDate(today.getDate() - 120);
 
   const startDate = parseDateArg(kv.get('--start'), startDefault);
   const endDate = parseDateArg(kv.get('--end'), today);
@@ -71,9 +71,9 @@ async function main() {
   console.log(`Transactions: ${transactions.length}`);
   console.log(`Money in: $${moneyIn.toFixed(2)}`);
   console.log(`Money out: $${Math.abs(moneyOut).toFixed(2)}`);
-  console.log('Most recent 5 transactions:');
+  console.log('Most recent 20 transactions:');
 
-  for (const tx of transactions.slice(0, 5)) {
+  for (const tx of transactions.slice(0, 20)) {
     console.log(
       `- ${tx.date} | ${tx.type} | ${tx.amount.toFixed(2)} | ${tx.description || '(no description)'}`
     );

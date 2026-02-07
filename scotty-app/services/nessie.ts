@@ -1,3 +1,5 @@
+import seedSuite from '../data/nessie-seed-transactions.json';
+
 export interface NessieTransaction {
   _id: string;
   type: string;
@@ -18,6 +20,27 @@ interface NessieMerchant {
   _id: string;
 }
 
+type SeedAccountKey =
+  | 'primary_checking'
+  | 'emergency_savings'
+  | 'travel_card'
+  | 'household_checking';
+
+type SeedTransactionKind = 'purchase' | 'deposit' | 'withdrawal' | 'transfer';
+
+interface SeedTransaction {
+  kind: SeedTransactionKind;
+  account: SeedAccountKey;
+  payeeAccount?: SeedAccountKey;
+  date: string;
+  amount: number;
+  description: string;
+}
+
+interface SeedSuite {
+  transactions: SeedTransaction[];
+}
+
 interface NessieRawTransaction {
   _id: string;
   type?: string;
@@ -36,6 +59,7 @@ interface NessieOptions {
 const DEFAULT_BASE_URL = 'http://api.nessieisreal.com';
 const DEFAULT_TYPES = ['purchases', 'deposits', 'withdrawals', 'transfers'] as const;
 const DEFAULT_ACCOUNT_TYPES = ['Checking', 'Savings', 'Credit Card'] as const;
+const parsedSeedSuite = seedSuite as SeedSuite;
 
 interface NessieCreateResponse<T> {
   objectCreated?: T;
@@ -171,12 +195,6 @@ async function getMerchantIds(baseUrl: string, apiKey: string) {
   return merchants.map((merchant) => merchant._id);
 }
 
-function dateDaysAgo(daysAgo: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() - daysAgo);
-  return date.toISOString().slice(0, 10);
-}
-
 /**
  * Deletes all existing accounts for the API key so a clean seed can be created.
  */
@@ -216,154 +234,102 @@ export async function resetAndSeedNessieDummyData(
     createAccount(baseUrl, apiKey, customerB, 'Checking', 'Household Checking', 1400),
   ]);
   const accountIds = [checkingId, savingsId, creditCardId, secondCheckingId];
+  const accountIdByKey: Record<SeedAccountKey, string> = {
+    primary_checking: checkingId,
+    emergency_savings: savingsId,
+    travel_card: creditCardId,
+    household_checking: secondCheckingId,
+  };
 
   const merchantIds = await getMerchantIds(baseUrl, apiKey);
-  const preferredMerchants = merchantIds.slice(0, 3);
-
-  const transactionCalls: Array<Promise<unknown>> = [
-    nessieRequest(
-      baseUrl,
-      `/accounts/${checkingId}/deposits`,
-      apiKey,
-      'POST',
-      {
-        medium: 'balance',
-        transaction_date: dateDaysAgo(15),
-        status: 'completed',
-        amount: 1800,
-        description: 'Biweekly paycheck',
-      }
-    ),
-    nessieRequest(
-      baseUrl,
-      `/accounts/${checkingId}/withdrawals`,
-      apiKey,
-      'POST',
-      {
-        medium: 'balance',
-        transaction_date: dateDaysAgo(12),
-        status: 'completed',
-        amount: 175,
-        description: 'Cash withdrawal',
-      }
-    ),
-    nessieRequest(
-      baseUrl,
-      `/accounts/${checkingId}/transfers`,
-      apiKey,
-      'POST',
-      {
-        medium: 'balance',
-        transaction_date: dateDaysAgo(9),
-        status: 'completed',
-        payee_id: savingsId,
-        amount: 450,
-        description: 'Transfer to savings',
-      }
-    ),
-    nessieRequest(
-      baseUrl,
-      `/accounts/${secondCheckingId}/deposits`,
-      apiKey,
-      'POST',
-      {
-        medium: 'balance',
-        transaction_date: dateDaysAgo(10),
-        status: 'completed',
-        amount: 1200,
-        description: 'Client payment',
-      }
-    ),
-    nessieRequest(
-      baseUrl,
-      `/accounts/${secondCheckingId}/transfers`,
-      apiKey,
-      'POST',
-      {
-        medium: 'balance',
-        transaction_date: dateDaysAgo(6),
-        status: 'completed',
-        payee_id: checkingId,
-        amount: 275,
-        description: 'Shared utilities split',
-      }
-    ),
-    nessieRequest(
-      baseUrl,
-      `/accounts/${creditCardId}/withdrawals`,
-      apiKey,
-      'POST',
-      {
-        medium: 'balance',
-        transaction_date: dateDaysAgo(5),
-        status: 'completed',
-        amount: 85,
-        description: 'Card payment due',
-      }
-    ),
-  ];
-
-  if (preferredMerchants.length > 0) {
-    transactionCalls.push(
-      nessieRequest(
-        baseUrl,
-        `/accounts/${checkingId}/purchases`,
-        apiKey,
-        'POST',
-        {
-          merchant_id: preferredMerchants[0],
-          medium: 'balance',
-          purchase_date: dateDaysAgo(8),
-          amount: 64.52,
-          status: 'completed',
-          description: 'Grocery run',
-        }
-      )
-    );
-  }
-  if (preferredMerchants.length > 1) {
-    transactionCalls.push(
-      nessieRequest(
-        baseUrl,
-        `/accounts/${checkingId}/purchases`,
-        apiKey,
-        'POST',
-        {
-          merchant_id: preferredMerchants[1],
-          medium: 'balance',
-          purchase_date: dateDaysAgo(4),
-          amount: 22.95,
-          status: 'completed',
-          description: 'Coffee and lunch',
-        }
-      )
-    );
-  }
-  if (preferredMerchants.length > 2) {
-    transactionCalls.push(
-      nessieRequest(
-        baseUrl,
-        `/accounts/${creditCardId}/purchases`,
-        apiKey,
-        'POST',
-        {
-          merchant_id: preferredMerchants[2],
-          medium: 'balance',
-          purchase_date: dateDaysAgo(2),
-          amount: 119.99,
-          status: 'completed',
-          description: 'Online electronics purchase',
-        }
-      )
-    );
+  if (merchantIds.length === 0) {
+    throw new Error('No merchants returned by Nessie; cannot create purchase records.');
   }
 
-  await Promise.all(transactionCalls);
+  let transactionsCreated = 0;
+  for (let i = 0; i < parsedSeedSuite.transactions.length; i++) {
+    const tx = parsedSeedSuite.transactions[i];
+    const accountId = accountIdByKey[tx.account];
+
+    try {
+      if (tx.kind === 'purchase') {
+        const merchantId = merchantIds[i % merchantIds.length];
+        await nessieRequest(
+          baseUrl,
+          `/accounts/${accountId}/purchases`,
+          apiKey,
+          'POST',
+          {
+            merchant_id: merchantId,
+            medium: 'balance',
+            purchase_date: tx.date,
+            amount: tx.amount,
+            status: 'completed',
+            description: tx.description,
+          }
+        );
+      } else if (tx.kind === 'deposit') {
+        await nessieRequest(
+          baseUrl,
+          `/accounts/${accountId}/deposits`,
+          apiKey,
+          'POST',
+          {
+            medium: 'balance',
+            transaction_date: tx.date,
+            amount: tx.amount,
+            status: 'completed',
+            description: tx.description,
+          }
+        );
+      } else if (tx.kind === 'withdrawal') {
+        await nessieRequest(
+          baseUrl,
+          `/accounts/${accountId}/withdrawals`,
+          apiKey,
+          'POST',
+          {
+            medium: 'balance',
+            transaction_date: tx.date,
+            amount: tx.amount,
+            status: 'completed',
+            description: tx.description,
+          }
+        );
+      } else if (tx.kind === 'transfer') {
+        if (!tx.payeeAccount) {
+          throw new Error('Missing payeeAccount for transfer record.');
+        }
+        await nessieRequest(
+          baseUrl,
+          `/accounts/${accountId}/transfers`,
+          apiKey,
+          'POST',
+          {
+            medium: 'balance',
+            transaction_date: tx.date,
+            payee_id: accountIdByKey[tx.payeeAccount],
+            amount: tx.amount,
+            status: 'completed',
+            description: tx.description,
+          }
+        );
+      }
+
+      transactionsCreated += 1;
+    } catch (error) {
+      throw new Error(
+        `Failed seeding tx #${i + 1} (${tx.kind} ${tx.account} ${tx.date}): ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
 
   return {
     customerIds,
     accountIds,
-    transactionsCreated: transactionCalls.length,
+    transactionsCreated,
   };
 }
 

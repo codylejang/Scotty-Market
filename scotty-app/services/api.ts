@@ -87,6 +87,32 @@ interface BackendTransaction {
   pending: boolean;
 }
 
+function mapNessieCategory(type: string, description: string): TransactionCategory {
+  const text = `${type} ${description}`.toLowerCase();
+
+  if (text.includes('grocer')) return 'groceries';
+  if (text.includes('dining') || text.includes('restaurant') || text.includes('cafe')) {
+    return 'food_dining';
+  }
+  if (text.includes('travel') || text.includes('rideshare') || text.includes('train')) {
+    return 'transport';
+  }
+  if (text.includes('fun') || text.includes('movie') || text.includes('concert')) {
+    return 'entertainment';
+  }
+  if (text.includes('shopping') || text.includes('store') || text.includes('gift')) {
+    return 'shopping';
+  }
+  if (text.includes('self-care') || text.includes('wellness') || text.includes('pharmacy')) {
+    return 'health';
+  }
+  if (type.toLowerCase().includes('deposit') || type.toLowerCase().includes('transfer')) {
+    return 'other';
+  }
+
+  return mapCategory(type);
+}
+
 function mapTransaction(bt: BackendTransaction): Transaction {
   return {
     id: bt.id,
@@ -110,7 +136,7 @@ export async function fetchTransactions(days: number = 30): Promise<Transaction[
     return nessieTransactions.map((tx) => ({
       id: tx._id,
       amount: Math.abs(tx.amount), // Frontend currently expects absolute amounts
-      category: mapCategory(tx.type),
+      category: mapNessieCategory(tx.type, tx.description || ''),
       merchant: tx.description || tx.type,
       date: new Date(tx.date),
       isSubscription: tx.type.toLowerCase().includes('subscription'),
