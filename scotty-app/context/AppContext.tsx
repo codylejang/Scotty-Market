@@ -269,6 +269,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     generateDailyInsight(transactions).then(setDailyInsight);
   }
 
+  function initializeFallbackState() {
+    const metrics = calculateHealthMetrics({
+      transactions,
+      monthlyBudget: profile.monthlyBudget,
+      monthlySavingsGoal: profile.monthlySavingsGoal,
+      currentBalance: profile.currentBalance,
+    });
+    setHealthMetrics(metrics);
+
+    const scotty = calculateScottyState(metrics, null, 10);
+    setScottyState(scotty);
+
+    const newAchievements = buildLocalAchievements(transactions);
+    setAchievements(newAchievements);
+
+    generateDailyInsight(transactions).then(setDailyInsight);
+  }
+
+
   async function initializeApp() {
     const isHealthy = await checkBackendHealth();
     if (!isHealthy) {
