@@ -10,7 +10,11 @@
       "Bash(ls:*)",
       "Bash(npx expo:*)",
       "Bash(npx:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npm test:*)",
+      "Bash(sqlite3:*)",
+      "Bash(curl:*)",
+      "Bash(python3:*)"
     ]
   }
 }

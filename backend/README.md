@@ -20,7 +20,9 @@ backend/
 │   │   └── mock-notification.ts
 │   ├── services/
 │   │   ├── ingestion.ts      # Transaction ingest + dedup + pending linking
+│   │   ├── retrieval.ts      # Search, stats, anomaly detection (tool-driven)
 │   │   ├── financial-summary.ts  # 7d/30d summaries
+│   │   ├── health-metrics.ts # Financial health scoring
 │   │   ├── quest-evaluation.ts   # Quest progress verification
 │   │   └── subscription-analysis.ts  # Recurring charge detection
 │   ├── agents/
@@ -35,10 +37,44 @@ backend/
 ├── tests/
 │   ├── fixtures/transactions.ts
 │   ├── ingestion.test.ts
+│   ├── retrieval.test.ts     # Search, stats, anomaly detection, merchant normalization
 │   ├── quest-evaluation.test.ts
+│   ├── workflow.test.ts
 │   └── daily-digest.test.ts
 └── data/                     # SQLite database (auto-created)
 ```
+
+## Retrieval Architecture
+
+The agent uses a **tool-driven retrieval** pattern: the LLM never sees the full database. Instead, it calls bounded query tools that return paginated, indexed results.
+
+```
+User question / daily trigger
+  → (1) Retrieval tools query DB (search, stats, anomaly detection)
+  → (2) Code computes features & aggregates (not LLM)
+  → (3) LLM produces insights/quests grounded in retrieved facts + evidence
+  → (4) Results persisted + logged in agent_decision_log
+```
+
+### Retrieval Tools (in `services/retrieval.ts`)
+
+| Tool | Purpose | Key Features |
+|------|---------|-------------|
+| `search_transactions` | Find specific transactions | Text search, amount/date/category filters, pagination, relevance sort |
+| `get_transaction_by_id` | Full details for evidence | User-scoped, includes metadata + merchant_key |
+| `list_transaction_stats` | Aggregates over any time span | Group by category/merchant/day/week/month, stddev |
+| `detect_anomalies` | Find stand-out transactions | 6 algorithms, configurable sensitivity |
+
+### Anomaly Detection Algorithms (computed in code, not LLM)
+
+| Type | Detection Method |
+|------|-----------------|
+| `large_vs_baseline` | Z-score vs 90-day category average |
+| `new_merchant` | merchant_key first seen in detection window |
+| `duplicate_charge` | Same merchant + same amount within time window |
+| `spike_category` | Recent daily spend rate vs 90-day baseline rate |
+| `subscription_jump` | Latest charge vs recurring_candidate typical_amount |
+| `refund_outlier` | Z-score vs baseline refund average |
 
 ## Setup
 
@@ -56,7 +92,8 @@ npm run dev        # Start dev server (port 3001)
 |----------|---------|-------------|
 | `PORT` | `3001` | Server port |
 | `DB_PATH` | `./data/scotty.db` | SQLite database path |
-| `ANTHROPIC_API_KEY` | *(none)* | Claude API key (optional; uses fallback generation if not set) |
+| `DEDALUS_API_KEY` | *(none)* | Dedalus multi-model API key (preferred LLM provider) |
+| `ANTHROPIC_API_KEY` | *(none)* | Claude API key (fallback if Dedalus unavailable) |
 | `ENABLE_CRON` | `true` | Enable daily digest cron (5 AM) |
 
 ## API Endpoints
@@ -138,6 +175,97 @@ Response:
   "recommended_actions": []
 }
 ```
+
+### AI Endpoints
+
+#### GET /ai/scotty/insights
+Anomaly-driven insights with evidence grounding.
+
+```bash
+curl "http://localhost:3001/api/ai/scotty/insights?user_id=user_1"
+```
+
+Response:
+```json
+{
+  "insights": [
+    {
+      "title": "Spike Category",
+      "blurb": "Food & Drink spending is up 45% vs your 90-day average",
+      "confidence": "HIGH",
+      "evidence": {
+        "transaction_ids": ["txn_abc", "txn_def"],
+        "time_window": "2026-01-08 to 2026-02-07",
+        "computed_metrics": { "recent_daily": 28.5, "baseline_daily": 19.6, "pct_increase": 45 }
+      },
+      "followup": "Consider setting a Food & Drink spending cap."
+    }
+  ],
+  "log_id": "..."
+}
+```
+
+#### POST /ai/quests/generate
+Generate quests grounded in full-history data with evidence.
+
+```bash
+curl -X POST "http://localhost:3001/api/ai/quests/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user_1"}'
+```
+
+#### POST /v1/search/transactions
+Search transactions with filters, pagination, and summary.
+
+```bash
+curl -X POST "http://localhost:3001/api/v1/search/transactions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user_1",
+    "query_text": "starbucks",
+    "amount_min": -50,
+    "amount_max": -5,
+    "sort_by": "relevance",
+    "limit": 10
+  }'
+```
+
+#### GET /v1/transactions/:id
+Get full transaction details (evidence retrieval).
+
+```bash
+curl "http://localhost:3001/api/v1/transactions/txn_abc?user_id=user_1"
+```
+
+#### POST /v1/stats/transactions
+Compute aggregates for any time span.
+
+```bash
+curl -X POST "http://localhost:3001/api/v1/stats/transactions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user_1",
+    "date_start": "2026-01-01",
+    "date_end": "2026-02-07",
+    "group_by": "category"
+  }'
+```
+
+#### POST /v1/anomalies/detect
+Find stand-out transactions across full history.
+
+```bash
+curl -X POST "http://localhost:3001/api/v1/anomalies/detect" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user_1",
+    "anomaly_types": ["large_vs_baseline", "duplicate_charge", "new_merchant"],
+    "sensitivity": "med",
+    "limit": 10
+  }'
+```
+
+### Admin Endpoints
 
 ### POST /v1/admin/daily-digest
 Trigger daily digest manually.

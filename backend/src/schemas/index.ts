@@ -134,6 +134,94 @@ export const DailyPayloadSchema = z.object({
 });
 export type DailyPayload = z.infer<typeof DailyPayloadSchema>;
 
+// ─── Evidence-based Output Schemas (retrieval-grounded) ───
+
+export const EvidenceObject = z.object({
+  transaction_ids: z.array(z.string()),
+  time_window: z.string(),
+  computed_metrics: z.record(z.union([z.number(), z.string()])),
+});
+export type EvidenceObject = z.infer<typeof EvidenceObject>;
+
+export const InsightWithEvidence = z.object({
+  title: z.string().max(80),
+  blurb: z.string().max(200),
+  confidence: Confidence,
+  evidence: EvidenceObject,
+  followup: z.string().max(120).optional(),
+});
+export type InsightWithEvidence = z.infer<typeof InsightWithEvidence>;
+
+export const InsightResponseSchema = z.object({
+  insights: z.array(InsightWithEvidence).min(1).max(3),
+});
+export type InsightResponse = z.infer<typeof InsightResponseSchema>;
+
+export const QuestWithEvidence = z.object({
+  title: z.string().max(120),
+  metric_type: MetricType,
+  metric_params: z.record(z.unknown()),
+  reward_food_type: FoodType,
+  happiness_delta: z.number().int().min(1).max(20),
+  window_hours: z.number().int().min(1).max(168),
+  explanation: z.string().max(200),
+  evidence: EvidenceObject,
+});
+export type QuestWithEvidence = z.infer<typeof QuestWithEvidence>;
+
+export const QuestGenerateResponseSchema = z.object({
+  quests: z.array(QuestWithEvidence).min(1).max(5),
+});
+export type QuestGenerateResponse = z.infer<typeof QuestGenerateResponseSchema>;
+
+export const TransactionSearchResultSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  amount: z.number(),
+  merchant_name: z.string().nullable(),
+  merchant_key: z.string().nullable(),
+  name: z.string(),
+  category_primary: z.string().nullable(),
+  pending: z.boolean(),
+  currency: z.string(),
+});
+
+export const TransactionSearchResponseSchema = z.object({
+  transactions: z.array(TransactionSearchResultSchema),
+  next_offset: z.number().nullable(),
+  summary: z.object({
+    count: z.number(),
+    total: z.number(),
+    min: z.number(),
+    max: z.number(),
+  }),
+});
+export type TransactionSearchResponse = z.infer<typeof TransactionSearchResponseSchema>;
+
+export const AnomalySchema = z.object({
+  type: z.enum([
+    'large_vs_baseline', 'new_merchant', 'spike_category',
+    'duplicate_charge', 'subscription_jump', 'refund_outlier',
+  ]),
+  severity_score: z.number().min(0).max(1),
+  transaction_ids: z.array(z.string()),
+  explanation_short: z.string(),
+  baseline_window: z.string(),
+  computed_metrics: z.record(z.union([z.number(), z.string()])),
+});
+
+export const AnomalyResponseSchema = z.object({
+  anomalies: z.array(AnomalySchema),
+});
+export type AnomalyResponse = z.infer<typeof AnomalyResponseSchema>;
+
+export const RetrievalChatResponseSchema = z.object({
+  message: z.string().max(1000),
+  evidence: EvidenceObject.optional(),
+  recommended_actions: z.array(AgentActionOutput).max(2),
+});
+export type RetrievalChatResponse = z.infer<typeof RetrievalChatResponseSchema>;
+
 // ─── Financial Summary ───
 export const FinancialSummarySchema = z.object({
   user_id: z.string(),

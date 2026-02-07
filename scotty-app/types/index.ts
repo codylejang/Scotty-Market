@@ -91,3 +91,21 @@ export interface FoodItem {
   happinessBoost: number;
   cost: number; // credits required
 }
+
+// Budget data from backend
+export interface BudgetItem {
+  id: string;
+  category: string;
+  frequency: 'Day' | 'Week' | 'Month';
+  limitAmount: number;
+  derivedDailyLimit: number;
+  spent: number; // computed client-side from transactions
+}
+
+// Account data from backend
+export interface AccountInfo {
+  id: string;
+  type: string;
+  nickname: string;
+  balance: number;
+}

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ import { Scotty, ScottyRef } from './Scotty';
 import { useApp } from '../context/AppContext';
 import { generateDailyQuests } from '../services/mockData';
 import { fetchDailyQuests, refreshDailyQuests } from '../services/api';
-import { Quest } from '../types';
+import { BudgetItem, Quest } from '../types';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
@@ -32,103 +32,33 @@ type BudgetTab = 'Daily' | 'Monthly' | 'Yearly';
 
 const BUDGET_TABS: BudgetTab[] = ['Daily', 'Monthly', 'Yearly'];
 
-// Budget data indexed by tab
-const budgetsByTab: Record<BudgetTab, Array<{
-  emoji: string;
-  name: string;
-  spent: number;
-  limit: number;
-  percent: number;
-  projection: number;
-  color: string;
-}>> = {
-  Daily: [
-    {
-      emoji: '🎭',
-      name: 'Entertainment',
-      spent: 45.00,
-      limit: 60.00,
-      percent: 75,
-      projection: 92,
-      color: '#9b59b6',
-    },
-    {
-      emoji: '🍔',
-      name: 'Dining Out',
-      spent: 112.00,
-      limit: 120.00,
-      percent: 93,
-      projection: 115,
-      color: '#ff8a65',
-    },
-    {
-      emoji: '🛍️',
-      name: 'Shopping',
-      spent: 20.00,
-      limit: 150.00,
-      percent: 15,
-      projection: 40,
-      color: '#81d4fa',
-    },
-  ],
-  Monthly: [
-    {
-      emoji: '🏠',
-      name: 'Housing',
-      spent: 1200.00,
-      limit: 1500.00,
-      percent: 80,
-      projection: 80,
-      color: '#9b59b6',
-    },
-    {
-      emoji: '🚗',
-      name: 'Transportation',
-      spent: 300.00,
-      limit: 400.00,
-      percent: 75,
-      projection: 85,
-      color: '#ff8a65',
-    },
-    {
-      emoji: '💳',
-      name: 'Subscriptions',
-      spent: 89.00,
-      limit: 150.00,
-      percent: 59,
-      projection: 70,
-      color: '#81d4fa',
-    },
-  ],
-  Yearly: [
-    {
-      emoji: '🏡',
-      name: 'Housing',
-      spent: 14400.00,
-      limit: 18000.00,
-      percent: 80,
-      projection: 80,
-      color: '#9b59b6',
-    },
-    {
-      emoji: '🚘',
-      name: 'Transportation',
-      spent: 3600.00,
-      limit: 4800.00,
-      percent: 75,
-      projection: 85,
-      color: '#ff8a65',
-    },
-    {
-      emoji: '💳',
-      name: 'Subscriptions',
-      spent: 1068.00,
-      limit: 1800.00,
-      percent: 59,
-      projection: 70,
-      color: '#81d4fa',
-    },
-  ],
+const CATEGORY_EMOJI: Record<string, string> = {
+  'Food & Drink': '🍔',
+  Groceries: '🛒',
+  Transportation: '🚗',
+  Entertainment: '🎭',
+  Shopping: '🛍️',
+  Health: '💊',
+  Subscription: '💳',
+  Utilities: '💡',
+  Education: '📚',
+  Housing: '🏠',
+};
+
+const CATEGORY_COLORS = ['#9b59b6', '#ff8a65', '#81d4fa', '#4caf50', '#ff6b6b'];
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2,
+  }).format(value);
+
+const getDailyLimit = (budget: BudgetItem) => {
+  if (budget.derivedDailyLimit > 0) return budget.derivedDailyLimit;
+  if (budget.frequency === 'Day') return budget.limitAmount;
+  if (budget.frequency === 'Week') return budget.limitAmount / 7;
+  return budget.limitAmount / 30;
 };
 
 interface ScottyHomeScreenProps {
@@ -142,7 +72,7 @@ export default function ScottyHomeScreen({
   onCloseQuestsModal,
   onOpenQuestsModal,
 }: ScottyHomeScreenProps = {}) {
-  const { feedScotty, scottyState } = useApp();
+  const { feedScotty, budgets, totalBalance, dailySpend, scottyState } = useApp();
   const [activeBudgetTab, setActiveBudgetTab] = useState<BudgetTab>('Daily');
   const budgetPagerRef = useRef<ScrollView>(null);
   const [budgetPagerWidth, setBudgetPagerWidth] = useState(0);
@@ -152,7 +82,7 @@ export default function ScottyHomeScreen({
 
   // Quests data (no modal state here, controlled by parent)
   const [quests, setQuests] = useState<Quest[]>(generateDailyQuests());
-// Fetch quests from API on mount, fallback to mock data
+  // Fetch quests from API on mount, fallback to mock data
   React.useEffect(() => {
     const loadQuests = async () => {
       try {
@@ -191,6 +121,7 @@ export default function ScottyHomeScreen({
 
   // Happiness bar animated width
   const happinessWidth = useSharedValue(0);
+  const happinessPercent = Math.max(0, Math.min(100, scottyState.happiness));
   React.useEffect(() => {
     const target = Math.max(0, Math.min(100, scottyState.happiness));
     happinessWidth.value = withDelay(
@@ -252,6 +183,52 @@ export default function ScottyHomeScreen({
       setActiveBudgetTab(nextTab);
     }
   }, [activeBudgetTab, budgetPagerWidth]);
+
+  const totalDailyLimit = budgets.reduce((sum, budget) => sum + getDailyLimit(budget), 0);
+  const dailySpendPercent = totalDailyLimit > 0
+    ? Math.min(100, Math.round((dailySpend / totalDailyLimit) * 100))
+    : 0;
+
+  const budgetsByTab = useMemo(() => {
+    const byTab: Record<BudgetTab, Array<{
+      id: string;
+      emoji: string;
+      name: string;
+      spent: number;
+      limit: number;
+      percent: number;
+      projection: number;
+      color: string;
+    }>> = { Daily: [], Monthly: [], Yearly: [] };
+
+    budgets.forEach((budget, index) => {
+      const dailyLimit = getDailyLimit(budget);
+      const limits: Record<BudgetTab, number> = {
+        Daily: dailyLimit,
+        Monthly: dailyLimit * 30,
+        Yearly: dailyLimit * 365,
+      };
+      const emoji = CATEGORY_EMOJI[budget.category] || '📊';
+      const color = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+
+      (Object.keys(limits) as BudgetTab[]).forEach((tab) => {
+        const limit = limits[tab];
+        const percent = limit > 0 ? Math.min(100, Math.round((budget.spent / limit) * 100)) : 0;
+        byTab[tab].push({
+          id: `${budget.id}-${tab}`,
+          emoji,
+          name: budget.category,
+          spent: budget.spent,
+          limit,
+          percent,
+          projection: percent,
+          color,
+        });
+      });
+    });
+
+    return byTab;
+  }, [budgets]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -378,9 +355,9 @@ export default function ScottyHomeScreen({
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>DAILY SPEND</Text>
-            <Text style={styles.summaryValueLarge}>$42.50</Text>
+            <Text style={styles.summaryValueLarge}>{formatCurrency(dailySpend)}</Text>
             <AnimatedProgressBar
-              targetPercent={65}
+              targetPercent={dailySpendPercent}
               color="#ff6b6b"
               delay={500}
               height={6}
@@ -390,8 +367,14 @@ export default function ScottyHomeScreen({
 
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>BANK TOTAL</Text>
-            <Text style={[styles.summaryValueLarge, styles.summaryValuePurple]}>$2,410</Text>
-            <Text style={styles.todayIncome}>↗ +$120 today</Text>
+            <Text style={[styles.summaryValueLarge, styles.summaryValuePurple]}>
+              {totalBalance > 0 ? formatCurrency(totalBalance) : '$--'}
+            </Text>
+            <Text style={styles.todayIncome}>
+              {totalDailyLimit > 0
+                ? `${dailySpendPercent}% of daily budget used`
+                : 'No daily budget set'}
+            </Text>
           </View>
         </View>
 
@@ -400,7 +383,6 @@ export default function ScottyHomeScreen({
           <View style={styles.budgetHeader}>
             <Text style={styles.budgetTitle}>BUDGET DASHBOARD</Text>
           </View>
-
           <View style={styles.tabContainer}>
             {BUDGET_TABS.map((tab) => (
               <TouchableOpacity
@@ -442,37 +424,43 @@ export default function ScottyHomeScreen({
                   budgetPagerWidth > 0 && { width: budgetPagerWidth },
                 ]}
               >
-                {budgetsByTab[tab].map((budget, index) => (
-                  <View key={budget.name} style={styles.budgetCard}>
-                    <View style={styles.budgetCategoryHeader}>
-                      <View style={styles.budgetCategoryLeft}>
-                        <Text style={styles.budgetEmoji}>{budget.emoji}</Text>
-                        <Text style={styles.budgetCategoryName}>{budget.name}</Text>
+                {budgetsByTab[tab].length > 0 ? (
+                  budgetsByTab[tab].map((budget, index) => (
+                    <View key={budget.id} style={styles.budgetCard}>
+                      <View style={styles.budgetCategoryHeader}>
+                        <View style={styles.budgetCategoryLeft}>
+                          <Text style={styles.budgetEmoji}>{budget.emoji}</Text>
+                          <Text style={styles.budgetCategoryName}>{budget.name}</Text>
+                        </View>
+                        <Text style={styles.budgetCategoryAmount}>
+                          {formatCurrency(budget.spent)} / {formatCurrency(budget.limit)}
+                        </Text>
                       </View>
-                      <Text style={styles.budgetCategoryAmount}>
-                        ${budget.spent.toFixed(2)} / ${budget.limit.toFixed(2)}
+                      <AnimatedProgressBar
+                        targetPercent={budget.percent}
+                        color={budget.color}
+                        delay={600 + index * 150}
+                        animationKey={
+                          tab === activeBudgetTab
+                            ? `active-${activeBudgetTab}`
+                            : `inactive-${tab}`
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.budgetProjection,
+                          budget.projection > 100 && styles.budgetProjectionWarning,
+                        ]}
+                      >
+                        Projected End: {budget.projection}%
                       </Text>
                     </View>
-                    <AnimatedProgressBar
-                      targetPercent={budget.percent}
-                      color={budget.color}
-                      delay={600 + index * 150}
-                      animationKey={
-                        tab === activeBudgetTab
-                          ? `active-${activeBudgetTab}`
-                          : `inactive-${tab}`
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.budgetProjection,
-                        budget.projection > 100 && styles.budgetProjectionWarning,
-                      ]}
-                    >
-                      Projected End: {budget.projection}%
-                    </Text>
+                  ))
+                ) : (
+                  <View style={styles.budgetCard}>
+                    <Text style={styles.budgetCategoryName}>No budgets set up yet</Text>
                   </View>
-                ))}
+                )}
               </View>
             ))}
           </ScrollView>

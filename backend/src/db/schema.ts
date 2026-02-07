@@ -168,4 +168,66 @@ export const MIGRATIONS = [
       ON bank_sync_state(provider, last_sync_at);
     `,
   },
+  {
+    version: 3,
+    name: 'retrieval_indexes_and_merchant_key',
+    sql: `
+      -- Add merchant_key column for stable grouping (normalized from merchant_name)
+      ALTER TABLE transaction_ ADD COLUMN merchant_key TEXT;
+
+      -- Composite indexes for retrieval tools
+      CREATE INDEX IF NOT EXISTS idx_txn_user_amount ON transaction_(user_id, amount);
+      CREATE INDEX IF NOT EXISTS idx_txn_user_merchant_key_date ON transaction_(user_id, merchant_key, date);
+      CREATE INDEX IF NOT EXISTS idx_txn_user_category_date ON transaction_(user_id, category_primary, date);
+      CREATE INDEX IF NOT EXISTS idx_recurring_user_merchant ON recurring_candidate(user_id, merchant_key);
+
+      -- Backfill merchant_key from existing data
+      UPDATE transaction_ SET merchant_key = LOWER(TRIM(COALESCE(merchant_name, name)))
+      WHERE merchant_key IS NULL;
+    `,
+  },
+  {
+    version: 4,
+    name: 'standard_apis',
+    sql: `
+      -- Budget: add frequency and derived_daily_limit columns
+      ALTER TABLE budget ADD COLUMN frequency TEXT NOT NULL DEFAULT 'Month';
+      ALTER TABLE budget ADD COLUMN derived_daily_limit REAL;
+
+      -- Backfill: existing budgets assumed monthly
+      UPDATE budget SET frequency = 'Month',
+        derived_daily_limit = ROUND(amount / 30.0, 2)
+      WHERE derived_daily_limit IS NULL;
+
+      -- Scotty state: add growth_level and stamina
+      ALTER TABLE scotty_state ADD COLUMN growth_level INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE scotty_state ADD COLUMN stamina INTEGER NOT NULL DEFAULT 100;
+
+      -- Inventory: tracks food items earned from quests
+      CREATE TABLE IF NOT EXISTS inventory_item (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES user_profile(id),
+        item_type TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 0,
+        source_quest_id TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(user_id, item_type)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_inventory_user ON inventory_item(user_id);
+
+      -- Feeding events: audit trail
+      CREATE TABLE IF NOT EXISTS feeding_event (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES user_profile(id),
+        item_type TEXT NOT NULL,
+        delta_happiness INTEGER NOT NULL DEFAULT 0,
+        delta_stamina INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_feeding_user ON feeding_event(user_id);
+    `,
+  },
 ];

@@ -6,6 +6,8 @@ import {
   HealthMetrics,
   DailyInsight,
   FoodType,
+  BudgetItem,
+  AccountInfo,
   Quest,
 } from '../types';
 
@@ -338,6 +340,51 @@ export function mapInsightToFrontend(
     type,
     date: new Date(),
   };
+}
+
+// ─── Budget API ───
+
+export async function fetchBudgets(): Promise<BudgetItem[]> {
+  const data = await apiFetch<{ budgets: Array<{
+    id: string;
+    category: string;
+    frequency: string;
+    limit_amount: number;
+    derived_daily_limit: number;
+  }> }>(`/v1/budget?user_id=${DEFAULT_USER_ID}`);
+
+  return data.budgets.map(b => ({
+    id: b.id,
+    category: b.category,
+    frequency: b.frequency as BudgetItem['frequency'],
+    limitAmount: b.limit_amount,
+    derivedDailyLimit: b.derived_daily_limit,
+    spent: 0, // computed client-side
+  }));
+}
+
+// ─── Account API ───
+
+export async function fetchAccounts(): Promise<{ accounts: AccountInfo[]; totalBalance: number }> {
+  const data = await apiFetch<{
+    accounts: Array<{ id: string; type: string; nickname: string; balance: number }>;
+    totalBalance: number;
+  }>('/v1/finance/accounts');
+
+  return {
+    accounts: data.accounts,
+    totalBalance: data.totalBalance,
+  };
+}
+
+// ─── Daily Spend ───
+
+export async function fetchTodaySpend(): Promise<number> {
+  const today = new Date().toISOString().split('T')[0];
+  const data = await apiFetch<{ summary: { total_spend: number } }>(
+    `/v1/finance/transactions?date_start=${today}&date_end=${today}&limit=1`
+  );
+  return data.summary.total_spend;
 }
 
 /**
