@@ -262,9 +262,9 @@ export default function ScottyHomeScreen({
       // Call context feedScotty — meat is a meal, others are treats
       feedScotty(type === 'coffee' ? 'meal' : 'treat');
 
-      // If we're on the interactive tutorial feed step, advance after a short delay
+      // If we're on the interactive tutorial feed step, wait 2s so user sees Scotty become happy
       if (isWaitingForFeed) {
-        setTimeout(() => advanceTutorial(), 900);
+        setTimeout(() => advanceTutorial(), 2000);
       }
     },
     [foodCounts, scottyLayout, feedScotty, isWaitingForFeed, advanceTutorial]
