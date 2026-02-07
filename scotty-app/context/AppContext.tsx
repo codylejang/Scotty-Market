@@ -10,17 +10,15 @@ import {
   FoodType,
   BudgetItem,
   AccountInfo,
+  TransactionCategory,
+  Quest,
 } from '../types';
-import {
-  generateTransactionHistory,
-  generateUserProfile,
-  generateSampleAchievements,
-} from '../services/mockData';
 import {
   calculateHealthMetrics,
   calculateScottyState,
 } from '../services/healthScore';
 import { generateDailyInsight, generateChatResponse } from '../services/ai';
+import { getSpendingByCategory } from '../services/transactionMetrics';
 import {
   checkBackendHealth,
   fetchDailyPayload,
@@ -34,6 +32,10 @@ import {
   fetchBudgets,
   fetchAccounts,
   fetchTodaySpend,
+  fetchDailyQuests,
+  fetchSpendingTrend,
+  fetchUpcomingBills,
+  UpcomingBillsData,
 } from '../services/api';
 
 /** Race a promise against a timeout. Rejects if the promise doesn't resolve in time. */
@@ -63,6 +65,11 @@ interface AppState {
   accounts: AccountInfo[];
   totalBalance: number;
   dailySpend: number;
+
+  // Quests & trends
+  quests: Quest[];
+  spendingTrend: { months: string[]; totals: number[] };
+  upcomingBills: UpcomingBillsData | null;
 
   // Chat
   chatMessages: ChatMessage[];
@@ -94,15 +101,51 @@ const defaultHealthMetrics: HealthMetrics = {
 
 const DAILY_HAPPINESS_DECAY = 20;
 const HAPPINESS_DECAY_INTERVAL_MS = 60_000;
+const defaultProfile: UserProfile = {
+  monthlyBudget: 1500,
+  monthlySavingsGoal: 300,
+  currentBalance: 2400,
+};
 
 const AppContext = createContext<AppState | null>(null);
 
+function buildLocalAchievements(transactions: Transaction[]): Achievement[] {
+  const spending = getSpendingByCategory(transactions);
+  const topCategory = Object.entries(spending)
+    .filter(([, amount]) => amount > 0)
+    .sort(([, a], [, b]) => b - a)[0];
+
+  const achievements: Achievement[] = [];
+  if (topCategory) {
+    const [category, amount] = topCategory;
+    achievements.push({
+      id: `top_cat_${Date.now()}`,
+      title: `Reduce ${category.replace('_', ' ')} spending`,
+      description: `You spent $${amount.toFixed(0)} on ${category.replace('_', ' ')} recently. Try cutting back by 20%.`,
+      targetAmount: Math.round(amount * 0.8),
+      currentAmount: amount,
+      completed: false,
+      category: category as TransactionCategory,
+      aiGenerated: true,
+    });
+  }
+
+  achievements.push({
+    id: `weekend_${Date.now()}`,
+    title: 'Weekend Saver',
+    description: 'Keep weekend spending under $50 for entertainment and dining.',
+    targetAmount: 50,
+    currentAmount: 0,
+    completed: false,
+    aiGenerated: true,
+  });
+
+  return achievements;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  // Initialize with mock data (used as fallback)
-  const [profile] = useState<UserProfile>(() => generateUserProfile());
-  const [transactions, setTransactions] = useState<Transaction[]>(() =>
-    generateTransactionHistory(30, 3)
-  );
+  const [profile] = useState<UserProfile>(defaultProfile);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [scottyState, setScottyState] = useState<ScottyState>(defaultScottyState);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics>(defaultHealthMetrics);
@@ -111,6 +154,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
   const [dailySpend, setDailySpend] = useState(0);
+  const [quests, setQuests] = useState<Quest[]>([]);
+  const [spendingTrend, setSpendingTrend] = useState<{ months: string[]; totals: number[] }>({ months: [], totals: [] });
+  const [upcomingBills, setUpcomingBills] = useState<UpcomingBillsData | null>(null);
   const [backendConnected, setBackendConnected] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
@@ -170,7 +216,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const scotty = calculateScottyState(metrics, null, 10);
     setScottyState(scotty);
 
-    const newAchievements = generateSampleAchievements(transactions);
+    const newAchievements = buildLocalAchievements(transactions);
     setAchievements(newAchievements);
 
     generateDailyInsight(transactions).then(setDailyInsight);
@@ -242,6 +288,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Non-critical data — keep defaults
     }
 
+    // Fetch quests, spending trend, upcoming bills (non-critical)
+    try {
+      const [questsData, trendData, billsData] = await Promise.all([
+        fetchDailyQuests().catch(() => []),
+        fetchSpendingTrend().catch(() => ({ months: [], totals: [] })),
+        fetchUpcomingBills().catch(() => null),
+      ]);
+
+      if (questsData.length > 0) setQuests(questsData);
+      if (trendData.months.length > 0) setSpendingTrend(trendData);
+      if (billsData) setUpcomingBills(billsData);
+    } catch {
+      // Non-critical data
+    }
+
     // Daily payload may trigger LLM on first run — fetch separately so it doesn't block above
     try {
       const payload = await withTimeout(fetchDailyPayload(), 10000);
@@ -255,7 +316,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Quest -> achievement mapping
     try {
       const questAchievement = await fetchActiveQuest();
-      const baseAchievements = generateSampleAchievements(txns.length > 0 ? txns : transactions);
+      const baseAchievements = buildLocalAchievements(txns.length > 0 ? txns : transactions);
       if (questAchievement) {
         setAchievements([questAchievement, ...baseAchievements.slice(0, 2)]);
       } else {
@@ -391,6 +452,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         accounts,
         totalBalance,
         dailySpend,
+        quests,
+        spendingTrend,
+        upcomingBills,
         chatMessages,
         backendConnected,
         feedScotty,

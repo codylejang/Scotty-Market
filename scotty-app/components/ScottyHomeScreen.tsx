@@ -22,7 +22,6 @@ import HeartBurst from './HeartBurst';
 import ScottyQuestsModal from './ScottyQuestsModal';
 import { Scotty, ScottyRef } from './Scotty';
 import { useApp } from '../context/AppContext';
-import { generateDailyQuests } from '../services/mockData';
 import { fetchDailyQuests, refreshDailyQuests } from '../services/api';
 import { BudgetItem, Quest } from '../types';
 
@@ -72,37 +71,47 @@ export default function ScottyHomeScreen({
   onCloseQuestsModal,
   onOpenQuestsModal,
 }: ScottyHomeScreenProps = {}) {
-  const { feedScotty, budgets, totalBalance, dailySpend, scottyState } = useApp();
+  const { feedScotty, budgets, totalBalance, dailySpend, scottyState, dailyInsight, quests: contextQuests } = useApp();
   const [activeBudgetTab, setActiveBudgetTab] = useState<BudgetTab>('Daily');
   const budgetPagerRef = useRef<ScrollView>(null);
   const [budgetPagerWidth, setBudgetPagerWidth] = useState(0);
 
-  // Food counts
-  const [foodCounts, setFoodCounts] = useState({ coffee: 1, food: 4, pets: 3 });
-
-  // Quests data (no modal state here, controlled by parent)
-  const [quests, setQuests] = useState<Quest[]>(generateDailyQuests());
-  // Fetch quests from API on mount, fallback to mock data
+  // Food counts derived from scottyState credits
+  const creditShare = Math.max(0, scottyState.foodCredits);
+  const [foodCounts, setFoodCounts] = useState({ coffee: 0, food: 0, pets: 0 });
   React.useEffect(() => {
-    const loadQuests = async () => {
-      try {
-        const apiQuests = await fetchDailyQuests();
-        setQuests(apiQuests);
-      } catch (error) {
-        // If API fails, use mock data (already set in initial state)
-        console.log('Using mock quests data');
-      }
-    };
-    loadQuests();
-  }, []);
+    // Distribute food credits across categories
+    const coffee = Math.min(Math.floor(creditShare / 3), creditShare);
+    const food = Math.min(Math.floor(creditShare / 3), creditShare - coffee);
+    const pets = Math.max(0, creditShare - coffee - food);
+    setFoodCounts({ coffee, food, pets });
+  }, [creditShare]);
+
+  // Quests data: prefer context (backend) quests, fallback to mock
+  const [quests, setQuests] = useState<Quest[]>(generateDailyQuests());
+  React.useEffect(() => {
+    if (contextQuests.length > 0) {
+      setQuests(contextQuests);
+    } else {
+      // Fetch directly if context hasn't loaded yet
+      const loadQuests = async () => {
+        try {
+          const apiQuests = await fetchDailyQuests();
+          setQuests(apiQuests);
+        } catch (error) {
+          console.log('Using mock quests data');
+        }
+      };
+      loadQuests();
+    }
+  }, [contextQuests]);
 
   const handleRefreshQuests = useCallback(async () => {
     try {
       const newQuests = await refreshDailyQuests();
       setQuests(newQuests);
     } catch (error) {
-      // Fallback to generating new mock data
-      setQuests(generateDailyQuests());
+      console.log('Failed to refresh quests');
     }
   }, []);
 
@@ -244,7 +253,11 @@ export default function ScottyHomeScreen({
         {/* Hero Section */}
         <View style={styles.heroSection}>
           <View style={styles.speechBubble}>
-            <Text style={styles.speechText}>"Save some kibble for later!"</Text>
+            <Text style={styles.speechText}>
+              {dailyInsight?.message
+                ? `"${dailyInsight.message}"`
+                : '"Save some kibble for later!"'}
+            </Text>
             <View style={styles.speechTail} />
           </View>
 
@@ -305,50 +318,33 @@ export default function ScottyHomeScreen({
         <View style={styles.section}>
           <Text style={styles.sectionHeaderTitle}>DAILY QUESTS</Text>
 
-          <View style={styles.goalCard}>
-            <View style={styles.goalHeader}>
-              <View style={styles.goalIcon}>
-                <Text style={styles.goalIconText}>🍖</Text>
+          {quests.slice(0, 3).map((quest, index) => {
+            const percent = quest.goal > 0
+              ? Math.min(100, Math.round((quest.progress / quest.goal) * 100))
+              : 0;
+            const colors = ['#ff8a65', '#9b59b6', '#81d4fa'];
+            const iconStyles = [undefined, styles.goalIconBlue, styles.goalIconGreen];
+            return (
+              <View key={quest.id} style={styles.goalCard}>
+                <View style={styles.goalHeader}>
+                  <View style={[styles.goalIcon, iconStyles[index]]}>
+                    <Text style={styles.goalIconText}>{quest.emoji}</Text>
+                  </View>
+                  <Text style={styles.goalTitle}>{quest.title.toUpperCase()}</Text>
+                </View>
+                <Text style={styles.goalAmount}>
+                  {quest.goal > 0
+                    ? `$${quest.progress.toFixed(0)} / $${quest.goal.toFixed(0)}`
+                    : `${quest.progress} ${quest.progressUnit}`}
+                </Text>
+                <AnimatedProgressBar
+                  targetPercent={percent}
+                  color={colors[index % colors.length]}
+                  delay={100 + index * 150}
+                />
               </View>
-              <Text style={styles.goalTitle}>JUICY MEAT FUND</Text>
-            </View>
-            <Text style={styles.goalAmount}>$45 / $60</Text>
-            <AnimatedProgressBar
-              targetPercent={75}
-              color="#ff8a65"
-              delay={100}
-            />
-          </View>
-
-          <View style={styles.goalCard}>
-            <View style={styles.goalHeader}>
-              <View style={[styles.goalIcon, styles.goalIconBlue]}>
-                <Text style={styles.goalIconText}>☕</Text>
-              </View>
-              <Text style={styles.goalTitle}>BOBA RUN SAVINGS</Text>
-            </View>
-            <Text style={styles.goalAmount}>$12 / $30</Text>
-            <AnimatedProgressBar
-              targetPercent={40}
-              color="#9b59b6"
-              delay={250}
-            />
-          </View>
-
-          <View style={styles.goalCard}>
-            <View style={styles.goalHeader}>
-              <View style={[styles.goalIcon, styles.goalIconGreen]}>
-                <Text style={styles.goalIconText}>🍦</Text>
-              </View>
-              <Text style={styles.goalTitle}>ICE CREAM PARTY</Text>
-            </View>
-            <Text style={styles.goalAmount}>$24 / $25</Text>
-            <AnimatedProgressBar
-              targetPercent={96}
-              color="#81d4fa"
-              delay={400}
-            />
-          </View>
+            );
+          })}
         </View>
 
         {/* Summary Cards */}
