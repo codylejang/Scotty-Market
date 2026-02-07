@@ -40,6 +40,122 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
     }
   });
 
+  // ─── GET /v1/profile ───
+  router.get('/v1/profile', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.user_id as string;
+      if (!userId) return res.status(400).json({ error: 'user_id required' });
+
+      const db = getDb();
+      const user = db
+        .prepare('SELECT id, timezone, preferences FROM user_profile WHERE id = ?')
+        .get(userId) as
+        | { id: string; timezone: string; preferences: string }
+        | undefined;
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const now = new Date();
+      const end = now.toISOString().split('T')[0];
+      const d30 = new Date(now);
+      d30.setDate(d30.getDate() - 30);
+      const start = d30.toISOString().split('T')[0];
+
+      const budgetRows = db
+        .prepare('SELECT amount, period FROM budget WHERE user_id = ?')
+        .all(userId) as Array<{ amount: number; period: string }>;
+      const monthlyBudget = budgetRows.reduce((sum, row) => {
+        if (row.period === 'weekly') return sum + row.amount * 4;
+        return sum + row.amount;
+      }, 0) || 1500;
+
+      const txRows = db
+        .prepare(
+          `SELECT amount FROM transaction_
+           WHERE user_id = ?
+             AND date BETWEEN ? AND ?
+             AND pending = 0`
+        )
+        .all(userId, start, end) as Array<{ amount: number }>;
+
+      const totals = txRows.reduce(
+        (acc, row) => {
+          if (row.amount < 0) acc.spent += Math.abs(row.amount);
+          else acc.income += row.amount;
+          return acc;
+        },
+        { spent: 0, income: 0 }
+      );
+
+      const monthlySavingsGoal = Math.round(monthlyBudget * 0.2);
+      const inferredCurrentBalance = Math.round((2000 + totals.income - totals.spent) * 100) / 100;
+      res.json({
+        id: user.id,
+        timezone: user.timezone,
+        preferences: JSON.parse(user.preferences || '{}'),
+        monthly_budget: Math.round(monthlyBudget * 100) / 100,
+        monthly_savings_goal: monthlySavingsGoal,
+        current_balance: inferredCurrentBalance,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /v1/budgets ───
+  router.get('/v1/budgets', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.user_id as string;
+      if (!userId) return res.status(400).json({ error: 'user_id required' });
+
+      const db = getDb();
+      const now = new Date();
+      const end = now.toISOString().split('T')[0];
+      const d30 = new Date(now);
+      d30.setDate(d30.getDate() - 30);
+      const start = d30.toISOString().split('T')[0];
+
+      const rows = db
+        .prepare(
+          `SELECT
+             b.category AS category,
+             b.amount AS amount,
+             b.period AS period,
+             COALESCE(SUM(
+               CASE
+                 WHEN t.amount < 0 THEN ABS(t.amount)
+                 ELSE 0
+               END
+             ), 0) AS spent
+           FROM budget b
+           LEFT JOIN transaction_ t
+             ON t.user_id = b.user_id
+            AND t.category_primary = b.category
+            AND t.date BETWEEN ? AND ?
+            AND t.pending = 0
+           WHERE b.user_id = ?
+           GROUP BY b.category, b.amount, b.period
+           ORDER BY b.category ASC`
+        )
+        .all(start, end, userId) as Array<{
+        category: string;
+        amount: number;
+        period: string;
+        spent: number;
+      }>;
+
+      res.json(
+        rows.map((row) => ({
+          category: row.category,
+          amount: Math.round(row.amount * 100) / 100,
+          period: row.period,
+          spent: Math.round(row.spent * 100) / 100,
+        }))
+      );
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ─── GET /v1/health-metrics ───
   router.get('/v1/health-metrics', async (req: Request, res: Response) => {
     try {

@@ -9,6 +9,7 @@ import {
   BudgetItem,
   AccountInfo,
   Quest,
+  UserProfile,
 } from '../types';
 
 // Configure this to point to your backend
@@ -176,6 +177,10 @@ export async function fetchTransactions(days: number = 30): Promise<Transaction[
   return data.map(mapTransaction);
 }
 
+export async function seedNessieDemo(): Promise<void> {
+  await apiFetch('/v1/admin/nessie/seed', { method: 'POST' });
+}
+
 export interface DailyPayload {
   insights: Array<{
     id: string;
@@ -216,6 +221,28 @@ export async function fetchDailyPayload(): Promise<DailyPayload> {
 export async function fetchHealthMetrics(): Promise<HealthMetrics> {
   return apiFetch<HealthMetrics>(`/v1/health-metrics?user_id=${DEFAULT_USER_ID}`);
 }
+
+export async function fetchUserProfile(): Promise<UserProfile> {
+  const data = await apiFetch<{
+    monthly_budget: number;
+    monthly_savings_goal: number;
+    current_balance: number;
+  }>(`/v1/profile?user_id=${DEFAULT_USER_ID}`);
+
+  return {
+    monthlyBudget: data.monthly_budget,
+    monthlySavingsGoal: data.monthly_savings_goal,
+    currentBalance: data.current_balance,
+  };
+}
+
+export interface BudgetProgress {
+  category: string;
+  amount: number;
+  spent: number;
+  period: 'monthly' | 'weekly' | string;
+}
+
 
 export async function fetchScottyState(): Promise<ScottyState> {
   const data = await apiFetch<{
@@ -359,25 +386,57 @@ export async function fetchBudgets(): Promise<BudgetItem[]> {
 // ─── Account API ───
 
 export async function fetchAccounts(): Promise<{ accounts: AccountInfo[]; totalBalance: number }> {
-  const data = await apiFetch<{
-    accounts: Array<{ id: string; type: string; nickname: string; balance: number }>;
-    totalBalance: number;
-  }>('/v1/finance/accounts');
+  try {
+    // Try Nessie-backed accounts first (external API)
+    const data = await apiFetch<{
+      accounts: Array<{ id: string; type: string; nickname: string; balance: number }>;
+      totalBalance: number;
+    }>('/v1/finance/accounts');
 
-  return {
-    accounts: data.accounts,
-    totalBalance: data.totalBalance,
-  };
+    return {
+      accounts: data.accounts,
+      totalBalance: data.totalBalance,
+    };
+  } catch (error) {
+    // Fallback: calculate from user profile
+    console.warn('[API] Failed to fetch accounts, using profile balance:', error);
+    const profile = await fetchUserProfile();
+    return {
+      accounts: [{
+        id: 'default',
+        type: 'checking',
+        nickname: 'Primary Account',
+        balance: profile.currentBalance,
+      }],
+      totalBalance: profile.currentBalance,
+    };
+  }
 }
 
 // ─── Daily Spend ───
 
 export async function fetchTodaySpend(): Promise<number> {
-  const today = new Date().toISOString().split('T')[0];
-  const data = await apiFetch<{ summary: { total_spend: number } }>(
-    `/v1/finance/transactions?date_start=${today}&date_end=${today}&limit=1`
-  );
-  return data.summary.total_spend;
+  // Calculate today's spend from user transactions
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  try {
+    // Fetch recent transactions and filter for today
+    const transactions = await fetchTransactions(7); // Get last week to ensure we have today
+    
+    const todaySpend = transactions
+      .filter(t => {
+        const txDate = new Date(t.date);
+        txDate.setHours(0, 0, 0, 0);
+        return txDate.getTime() === today.getTime();
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    return Math.round(todaySpend * 100) / 100;
+  } catch (error) {
+    console.warn('[API] Failed to fetch today spend:', error);
+    return 0;
+  }
 }
 
 /**

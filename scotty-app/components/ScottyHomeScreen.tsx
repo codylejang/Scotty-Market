@@ -8,6 +8,7 @@ import {
   Platform,
   LayoutChangeEvent,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
@@ -23,7 +24,10 @@ import ScottyQuestsModal from './ScottyQuestsModal';
 import { Scotty, ScottyRef } from './Scotty';
 import { useApp } from '../context/AppContext';
 import { fetchDailyQuests, refreshDailyQuests } from '../services/api';
-import { BudgetItem, Quest } from '../types';
+import { BudgetItem, Quest, TransactionCategory } from '../types';
+import TutorialModal from './TutorialModal';
+import { TUTORIAL_STEPS } from '../constants/Tutorial';
+import { Colors, Shadows } from '../constants/Theme';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
@@ -71,7 +75,19 @@ export default function ScottyHomeScreen({
   onCloseQuestsModal,
   onOpenQuestsModal,
 }: ScottyHomeScreenProps = {}) {
-  const { feedScotty, budgets, totalBalance, dailySpend, scottyState, dailyInsight, quests: contextQuests } = useApp();
+  const router = useRouter();
+  const {
+    feedScotty,
+    budgets,
+    totalBalance,
+    dailySpend,
+    scottyState,
+    dailyInsight,
+    quests: contextQuests,
+    tutorial,
+    advanceTutorial,
+    skipTutorial,
+  } = useApp();
   const [activeBudgetTab, setActiveBudgetTab] = useState<BudgetTab>('Daily');
   const budgetPagerRef = useRef<ScrollView>(null);
   const [budgetPagerWidth, setBudgetPagerWidth] = useState(0);
@@ -153,6 +169,23 @@ export default function ScottyHomeScreen({
     measureScotty();
   }, [measureScotty]);
 
+  // Tutorial state — must be declared before handleFeed
+  const currentStep = tutorial.active ? TUTORIAL_STEPS[tutorial.step] : null;
+  const isWaitingForFeed = currentStep?.waitForFeed === true;
+  const showTutorial = tutorial.active && currentStep?.screen === 'home' && !isWaitingForFeed;
+
+  // Grant a bonus food credit during the interactive feed tutorial step
+  const [tutorialFoodGranted, setTutorialFoodGranted] = React.useState(false);
+  React.useEffect(() => {
+    if (isWaitingForFeed && !tutorialFoodGranted) {
+      const total = foodCounts.coffee + foodCounts.food + foodCounts.pets;
+      if (total <= 0) {
+        setFoodCounts((prev) => ({ ...prev, food: prev.food + 1 }));
+      }
+      setTutorialFoodGranted(true);
+    }
+  }, [isWaitingForFeed, tutorialFoodGranted, foodCounts]);
+
   const handleFeed = useCallback(
     (type: 'coffee' | 'food' | 'pets') => {
       if (foodCounts[type] <= 0) return;
@@ -172,8 +205,13 @@ export default function ScottyHomeScreen({
 
       // Call context feedScotty
       feedScotty('treat');
+
+      // If we're on the interactive tutorial feed step, advance after a short delay
+      if (isWaitingForFeed) {
+        setTimeout(() => advanceTutorial(), 900);
+      }
     },
-    [foodCounts, scottyLayout, feedScotty]
+    [foodCounts, scottyLayout, feedScotty, isWaitingForFeed, advanceTutorial]
   );
 
   const handleBudgetTabPress = useCallback((tab: BudgetTab) => {
@@ -249,8 +287,24 @@ export default function ScottyHomeScreen({
     return byTab;
   }, [budgets]);
 
+  const handleTutorialPrimary = () => {
+    if (!currentStep) return;
+    if (currentStep.id === 'home-go-feed') {
+      advanceTutorial();
+      router.push('/(tabs)/feed');
+      return;
+    }
+    advanceTutorial();
+  };
+
   return (
     <View style={{ flex: 1 }}>
+      {/* Floating hint banner during interactive feed step */}
+      {isWaitingForFeed && (
+        <View style={styles.feedHintBanner}>
+          <Text style={styles.feedHintText}>🐾  Drag a treat onto Scotty!</Text>
+        </View>
+      )}
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -491,11 +545,93 @@ export default function ScottyHomeScreen({
         quests={quests}
         onRefreshQuests={handleRefreshQuests}
       />
+
+      <TutorialModal
+        visible={!!showTutorial}
+        title={currentStep?.title || ''}
+        body={currentStep?.body || ''}
+        stepIndex={tutorial.step}
+        totalSteps={TUTORIAL_STEPS.length}
+        primaryLabel={currentStep?.primaryLabel || 'Next'}
+        onPrimary={handleTutorialPrimary}
+        onSkip={skipTutorial}
+      />
     </View>
   );
 }
 
+function getBudgetScale(tab: 'Daily' | 'Weekly' | 'Monthly', now: Date): number {
+  if (tab === 'Monthly') return 1;
+  if (tab === 'Weekly') return 1 / 4.345;
+
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return 1 / daysInMonth;
+}
+
+function projectProjectedSpent(currentSpent: number): number {
+  const now = new Date();
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const elapsed = Math.max(0.1, dayOfMonth / daysInMonth);
+  return currentSpent / elapsed;
+}
+
+function formatCategoryName(category: string): string {
+  return category
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (s) => s.toUpperCase());
+}
+
+function categoryEmoji(category: TransactionCategory): string {
+  const byCategory: Record<TransactionCategory, string> = {
+    food_dining: '🍔',
+    groceries: '🛒',
+    transport: '🚗',
+    entertainment: '🎭',
+    shopping: '🛍️',
+    subscriptions: '📺',
+    utilities: '💡',
+    education: '📚',
+    health: '💊',
+    other: '🐾',
+  };
+  return byCategory[category];
+}
+
+function categoryEmojiFromName(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.includes('food') || lower.includes('dining')) return '🍔';
+  if (lower.includes('shop')) return '🛍️';
+  if (lower.includes('entertain')) return '🎭';
+  if (lower.includes('transport') || lower.includes('travel')) return '🚗';
+  if (lower.includes('groc')) return '🛒';
+  if (lower.includes('util')) return '💡';
+  if (lower.includes('subscript')) return '📺';
+  if (lower.includes('health')) return '💊';
+  return '🐾';
+}
+
 const styles = StyleSheet.create({
+  feedHintBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 50,
+    backgroundColor: Colors.coral,
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.ink,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  feedHintText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.white,
+    letterSpacing: 0.5,
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff6f3',
