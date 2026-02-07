@@ -182,6 +182,10 @@ export async function seedNessieDemo(): Promise<void> {
   await apiFetch('/v1/admin/nessie/seed', { method: 'POST' });
 }
 
+export async function runFullSeed(): Promise<void> {
+  await apiFetch('/v1/admin/seed', { method: 'POST' });
+}
+
 export interface DailyPayload {
   insights: Array<{
     id: string;
