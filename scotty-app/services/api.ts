@@ -177,6 +177,10 @@ export async function fetchTransactions(days: number = 30): Promise<Transaction[
   return data.map(mapTransaction);
 }
 
+export async function seedNessieDemo(): Promise<void> {
+  await apiFetch('/v1/admin/nessie/seed', { method: 'POST' });
+}
+
 export interface DailyPayload {
   insights: Array<{
     id: string;

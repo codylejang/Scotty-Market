@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Caveat_700Bold } from '@expo-google-fonts/caveat';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { AppProvider } from '@/context/AppContext';
@@ -19,7 +20,7 @@ export {
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
+  initialRouteName: 'index',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -28,6 +29,7 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    Caveat: Caveat_700Bold,
     ...FontAwesome.font,
   });
   const [showAnimatedSplash, setShowAnimatedSplash] = useState(true);
@@ -66,6 +68,8 @@ function RootLayoutNav() {
         <AppProvider>
           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
             <Stack>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen
                 name="modal"

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -17,7 +17,9 @@ import SpendingChart from '@/components/SpendingChart';
 import HealthTab from '@/components/HealthTab';
 import GoalWorkshopModal from '@/components/GoalWorkshopModal';
 import BudgetBuilderModal from '@/components/BudgetBuilderModal';
+import TutorialModal from '@/components/TutorialModal';
 import { getSpendingByCategory, getTotalSpending } from '@/services/transactionMetrics';
+import { TUTORIAL_STEPS } from '@/constants/Tutorial';
 
 type TabType = 'transactions' | 'analytics' | 'health';
 
@@ -40,6 +42,10 @@ export default function FeedScreen() {
     spendingTrend,
     quests,
     upcomingBills,
+    tutorial,
+    advanceTutorial,
+    skipTutorial,
+    completeTutorial,
   } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
   const [showGoalModal, setShowGoalModal] = useState(false);
@@ -52,6 +58,28 @@ export default function FeedScreen() {
   const spending = getSpendingByCategory(transactions);
   const monthlyTotal = getTotalSpending(transactions, 30);
   const pageWidth = useMemo(() => Dimensions.get('window').width, []);
+
+  const currentStep = tutorial.active ? TUTORIAL_STEPS[tutorial.step] : null;
+  const showTutorial = tutorial.active && currentStep?.screen === 'feed';
+
+  useEffect(() => {
+    if (!showTutorial || !currentStep?.tab) return;
+    const index = TABS.findIndex((item) => item.key === currentStep.tab);
+    if (index < 0) return;
+    if (activeTab !== currentStep.tab) {
+      setActiveTab(currentStep.tab);
+    }
+    pagerRef.current?.scrollTo({ x: index * pageWidth, animated: true });
+  }, [showTutorial, currentStep?.tab, activeTab, pageWidth]);
+
+  const handleTutorialPrimary = () => {
+    if (!currentStep) return;
+    if (currentStep.isFinal) {
+      completeTutorial();
+      return;
+    }
+    advanceTutorial();
+  };
 
   const handleTabPress = (tab: TabType) => {
     const index = TABS.findIndex((item) => item.key === tab);
@@ -172,6 +200,35 @@ export default function FeedScreen() {
         visible={showBudgetModal}
         onClose={() => setShowBudgetModal(false)}
       />
+
+      <TutorialModal
+        visible={!!showTutorial}
+        title={currentStep?.title || ''}
+        body={currentStep?.body || ''}
+        stepIndex={tutorial.step}
+        totalSteps={TUTORIAL_STEPS.length}
+        primaryLabel={currentStep?.primaryLabel || 'Next'}
+        onPrimary={handleTutorialPrimary}
+        onSkip={skipTutorial}
+        extraContent={
+          currentStep?.isFinal ? (
+            <View style={styles.tutorialActions}>
+              <TouchableOpacity
+                style={styles.tutorialActionButton}
+                onPress={() => setShowGoalModal(true)}
+              >
+                <Text style={styles.tutorialActionText}>Start a goal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.tutorialActionButton}
+                onPress={() => setShowBudgetModal(true)}
+              >
+                <Text style={styles.tutorialActionText}>Create a budget</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null
+        }
+      />
     </View>
   );
 }
@@ -238,6 +295,26 @@ const styles = StyleSheet.create({
   headerRightSpacer: {
     width: 40,
     height: 40,
+  },
+  tutorialActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  tutorialActionButton: {
+    flex: 1,
+    backgroundColor: '#fff9c4',
+    borderWidth: 2,
+    borderColor: '#000',
+    borderRadius: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  tutorialActionText: {
+    fontFamily: FONT,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#000',
   },
 
   // Tab Bar

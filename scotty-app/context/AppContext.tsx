@@ -38,6 +38,8 @@ import {
   fetchUpcomingBills,
   UpcomingBillsData,
 } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TUTORIAL_STEPS } from '../constants/Tutorial';
 
 /** Race a promise against a timeout. Rejects if the promise doesn't resolve in time. */
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -78,12 +80,28 @@ interface AppState {
   // Connection status
   backendConnected: boolean;
 
+  // Onboarding
+  onboarding: {
+    agreedToPact: boolean;
+  };
+
+  // Tutorial
+  tutorial: {
+    active: boolean;
+    step: number;
+  };
+
   // Actions
   feedScotty: (type: FoodType) => void;
   completeAchievement: (id: string) => void;
   dismissAchievement: (id: string) => void;
   sendChatMessage: (message: string) => Promise<void>;
   refreshInsight: () => Promise<void>;
+  setOnboardingAgreed: (value: boolean) => void;
+  advanceTutorial: () => void;
+  skipTutorial: () => void;
+  completeTutorial: () => void;
+  resetTutorial: () => void;
 }
 
 const defaultScottyState: ScottyState = {
@@ -109,6 +127,8 @@ const defaultHealthMetrics: HealthMetrics = {
 const DAILY_HAPPINESS_DECAY = 20;
 const HAPPINESS_DECAY_INTERVAL_MS = 60_000;
 
+
+const TUTORIAL_STORAGE_KEY = 'scotty_tutorial_completed';
 
 const AppContext = createContext<AppState | null>(null);
 
@@ -161,6 +181,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [spendingTrend, setSpendingTrend] = useState<{ months: string[]; totals: number[] }>({ months: [], totals: [] });
   const [upcomingBills, setUpcomingBills] = useState<UpcomingBillsData | null>(null);
   const [backendConnected, setBackendConnected] = useState(false);
+  const [onboardingAgreed, setOnboardingAgreed] = useState(false);
+  const [tutorialActive, setTutorialActive] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -204,7 +227,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     initializeApp();
   }, []);
 
-  function initializeFallbackState() {
+  useEffect(() => {
+    let isMounted = true;
+
+    AsyncStorage.getItem(TUTORIAL_STORAGE_KEY)
+      .then((value) => {
+        if (!isMounted) return;
+        if (value === 'true') {
+          setTutorialActive(false);
+          setTutorialStep(0);
+        } else {
+          setTutorialActive(true);
+          setTutorialStep(0);
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setTutorialActive(true);
+        setTutorialStep(0);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  function initializeFromMock() {
     const metrics = calculateHealthMetrics({
       transactions,
       monthlyBudget: profile.monthlyBudget,
@@ -222,10 +270,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     generateDailyInsight(transactions).then(setDailyInsight);
   }
 
+
   async function initializeApp() {
     const isHealthy = await checkBackendHealth();
     if (!isHealthy) {
-      initializeFallbackState();
+      initializeFromMock();
       return;
     }
     setBackendConnected(true);
@@ -235,7 +284,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.warn('[AppContext] Backend upgrade failed, using fallback state:', err);
       setBackendConnected(false);
-      initializeFallbackState();
+      initializeFromMock();
     }
   }
 
@@ -457,6 +506,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDailyInsight(insight);
   };
 
+  const completeTutorial = () => {
+    setTutorialActive(false);
+    setTutorialStep(0);
+    AsyncStorage.setItem(TUTORIAL_STORAGE_KEY, 'true').catch(() => undefined);
+  };
+
+  const advanceTutorial = () => {
+    setTutorialStep((prev) => {
+      const next = Math.min(prev + 1, TUTORIAL_STEPS.length - 1);
+      if (next === prev && prev === TUTORIAL_STEPS.length - 1) {
+        return prev;
+      }
+      return next;
+    });
+  };
+
+  const skipTutorial = () => {
+    completeTutorial();
+  };
+
+  const resetTutorial = () => {
+    AsyncStorage.removeItem(TUTORIAL_STORAGE_KEY).catch(() => undefined);
+    setTutorialStep(0);
+    setTutorialActive(true);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -475,11 +550,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         upcomingBills,
         chatMessages,
         backendConnected,
+        onboarding: { agreedToPact: onboardingAgreed },
+        tutorial: { active: tutorialActive, step: tutorialStep },
         feedScotty,
         completeAchievement,
         dismissAchievement,
         sendChatMessage,
         refreshInsight,
+        setOnboardingAgreed,
+        advanceTutorial,
+        skipTutorial,
+        completeTutorial,
+        resetTutorial,
       }}
     >
       {children}
