@@ -132,11 +132,12 @@ export default function ScottyHomeScreen({
   const happinessWidth = useSharedValue(0);
   const happinessPercent = Math.max(0, Math.min(100, scottyState.happiness));
   React.useEffect(() => {
+    const target = Math.max(0, Math.min(100, scottyState.happiness));
     happinessWidth.value = withDelay(
       200,
-      withTiming(happinessPercent, { duration: 800, easing: Easing.out(Easing.cubic) })
+      withTiming(target, { duration: 800, easing: Easing.out(Easing.cubic) })
     );
-  }, [happinessPercent, happinessWidth]);
+  }, [scottyState.happiness]);
   const happinessAnimStyle = useAnimatedStyle(() => ({
     width: `${happinessWidth.value}%`,
   }));
@@ -170,7 +171,7 @@ export default function ScottyHomeScreen({
       scottyAnimRef.current?.showLoved();
 
       // Call context feedScotty
-      feedScotty(type === 'food' ? 'meal' : 'treat');
+      feedScotty('treat');
     },
     [foodCounts, scottyLayout, feedScotty]
   );
@@ -300,7 +301,7 @@ export default function ScottyHomeScreen({
           <View style={styles.happinessContainer}>
             <View style={styles.meterHeader}>
               <Text style={styles.meterLabel}>SCOTTY HAPPINESS</Text>
-              <Text style={styles.meterValue}>{Math.round(happinessPercent)}%</Text>
+              <Text style={styles.meterValue}>{scottyState.happiness}%</Text>
             </View>
             <View style={styles.meterContainer}>
               <AnimatedLinearGradient
@@ -377,9 +378,6 @@ export default function ScottyHomeScreen({
         <View style={styles.budgetSection}>
           <View style={styles.budgetHeader}>
             <Text style={styles.budgetTitle}>BUDGET DASHBOARD</Text>
-            <TouchableOpacity>
-              <Text style={styles.settingsIcon}>⚙️</Text>
-            </TouchableOpacity>
           </View>
           <View style={styles.tabContainer}>
             {BUDGET_TABS.map((tab) => (
