@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
-import { View, StyleSheet, Image } from 'react-native';
-
-const idleSvg = require('../assets/images/idle.svg');
-const lovedSvg = require('../assets/images/loved.svg');
+import { View, StyleSheet } from 'react-native';
+import IdleSvg from '../assets/images/idle.svg';
+import LovedSvg from '../assets/images/loved.svg';
 
 interface ScottyProps {
   size?: number;
@@ -40,13 +39,11 @@ export const Scotty = forwardRef<ScottyRef, ScottyProps>(({ size = 160 }, ref) =
     };
   }, []);
 
+  const SvgComponent = isLoved ? LovedSvg : IdleSvg;
+
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      <Image
-        source={isLoved ? lovedSvg : idleSvg}
-        style={{ width: size, height: size }}
-        resizeMode="contain"
-      />
+      <SvgComponent width={size} height={size} />
     </View>
   );
 });
