@@ -8,6 +8,8 @@ import {
   DailyInsight,
   ChatMessage,
   FoodType,
+  BudgetItem,
+  AccountInfo,
 } from '../types';
 import {
   generateTransactionHistory,
@@ -29,6 +31,9 @@ import {
   sendChatMessageAPI,
   fetchActiveQuest,
   mapInsightToFrontend,
+  fetchBudgets,
+  fetchAccounts,
+  fetchTodaySpend,
 } from '../services/api';
 
 /** Race a promise against a timeout. Rejects if the promise doesn't resolve in time. */
@@ -52,6 +57,12 @@ interface AppState {
   scottyState: ScottyState;
   healthMetrics: HealthMetrics;
   dailyInsight: DailyInsight | null;
+
+  // Financial data
+  budgets: BudgetItem[];
+  accounts: AccountInfo[];
+  totalBalance: number;
+  dailySpend: number;
 
   // Chat
   chatMessages: ChatMessage[];
@@ -93,6 +104,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [scottyState, setScottyState] = useState<ScottyState>(defaultScottyState);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics>(defaultHealthMetrics);
   const [dailyInsight, setDailyInsight] = useState<DailyInsight | null>(null);
+  const [budgets, setBudgets] = useState<BudgetItem[]>([]);
+  const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+  const [totalBalance, setTotalBalance] = useState(0);
+  const [dailySpend, setDailySpend] = useState(0);
   const [backendConnected, setBackendConnected] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
@@ -135,25 +150,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setBackendConnected(true);
 
     // Fetch backend data with a global timeout so the app never hangs
+    // Keep backendConnected=true even if data loading times out, because
+    // individual features (like chat) may still work fine with the backend.
     try {
       await withTimeout(loadFromBackend(), 15000);
     } catch (err) {
-      console.warn('[AppContext] Backend upgrade failed, keeping mock data:', err);
-      setBackendConnected(false);
+      console.warn('[AppContext] Backend data loading timed out, keeping mock data. Chat still uses backend.', err);
     }
   }
 
   async function loadFromBackend() {
-    // Fetch non-blocking data first (fast endpoints)
+    // Fetch non-blocking data first (fast endpoints) — each catches individually
+    // so one failure doesn't block the rest
     const [txns, metrics, scotty] = await Promise.all([
-      fetchTransactions(30),
-      fetchHealthMetrics(),
-      fetchScottyState(),
+      fetchTransactions(30).catch((e) => { console.warn('[AppContext] fetchTransactions failed:', e.message); return [] as Transaction[]; }),
+      fetchHealthMetrics().catch((e) => { console.warn('[AppContext] fetchHealthMetrics failed:', e.message); return defaultHealthMetrics; }),
+      fetchScottyState().catch((e) => { console.warn('[AppContext] fetchScottyState failed:', e.message); return defaultScottyState; }),
     ]);
 
     if (txns.length > 0) setTransactions(txns);
     setScottyState(scotty);
     setHealthMetrics(metrics);
+
+    // Fetch budgets, accounts, daily spend (non-critical, don't block)
+    try {
+      const [budgetData, accountData, todaySpend] = await Promise.all([
+        fetchBudgets().catch(() => []),
+        fetchAccounts().catch(() => ({ accounts: [] as AccountInfo[], totalBalance: 0 })),
+        fetchTodaySpend().catch(() => 0),
+      ]);
+
+      if (budgetData.length > 0) {
+        // Compute spent per budget category from transactions
+        const today = new Date();
+        const budgetsWithSpend = budgetData.map(b => {
+          const catTxns = txns.filter(t => {
+            const catMap: Record<string, string> = {
+              'Food & Drink': 'food_dining', 'Groceries': 'groceries',
+              'Transportation': 'transport', 'Entertainment': 'entertainment',
+              'Shopping': 'shopping', 'Health': 'health', 'Subscription': 'subscriptions',
+            };
+            return t.category === (catMap[b.category] || 'other');
+          });
+          // Sum spending in current period
+          const periodDays = b.frequency === 'Day' ? 1 : b.frequency === 'Week' ? 7 : 30;
+          const periodStart = new Date(today);
+          periodStart.setDate(periodStart.getDate() - periodDays);
+          const periodTxns = catTxns.filter(t => t.date >= periodStart);
+          const spent = periodTxns.reduce((sum, t) => sum + t.amount, 0);
+          return { ...b, spent: Math.round(spent * 100) / 100 };
+        });
+        setBudgets(budgetsWithSpend);
+      }
+
+      setAccounts(accountData.accounts);
+      setTotalBalance(accountData.totalBalance);
+      setDailySpend(todaySpend);
+    } catch {
+      // Non-critical data — keep defaults
+    }
 
     // Daily payload may trigger LLM on first run — fetch separately so it doesn't block above
     try {
@@ -300,6 +355,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         scottyState,
         healthMetrics,
         dailyInsight,
+        budgets,
+        accounts,
+        totalBalance,
+        dailySpend,
         chatMessages,
         backendConnected,
         feedScotty,

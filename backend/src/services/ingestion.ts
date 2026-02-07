@@ -8,6 +8,19 @@ export interface IngestionResult {
   pendingLinked: number;
 }
 
+/** Normalize merchant name to a stable key for grouping/dedup. */
+export function normalizeMerchantKey(merchantName: string | null, name: string): string {
+  const raw = (merchantName || name || '').toLowerCase().trim();
+  // Remove trailing IDs, hashes, location suffixes (e.g., "STARBUCKS #1234 NYC" → "starbucks")
+  return raw
+    .replace(/\s*#\d+/g, '')
+    .replace(/\s*\d{4,}/g, '')
+    .replace(/\s+(llc|inc|corp|ltd)\.?$/i, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
  * Ingest a batch of transactions. Handles:
  * - Insert new transactions (by provider_txn_id uniqueness)
@@ -23,8 +36,8 @@ export function ingestTransactions(transactions: Transaction[]): IngestionResult
   const insertStmt = db.prepare(`
     INSERT OR IGNORE INTO transaction_
     (id, user_id, provider, provider_txn_id, date, amount, currency, name, merchant_name,
-     category_primary, category_detailed, pending, pending_transaction_id, metadata)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     category_primary, category_detailed, pending, pending_transaction_id, metadata, merchant_key)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const updatePendingStmt = db.prepare(`
@@ -52,12 +65,13 @@ export function ingestTransactions(transactions: Transaction[]): IngestionResult
       if (existing) continue;
 
       const id = txn.id || uuid();
+      const merchantKey = normalizeMerchantKey(txn.merchant_name, txn.name);
       const result = insertStmt.run(
         id, txn.user_id, txn.provider, txn.provider_txn_id,
         txn.date, txn.amount, txn.currency, txn.name,
         txn.merchant_name, txn.category_primary, txn.category_detailed,
         txn.pending ? 1 : 0, txn.pending_transaction_id,
-        JSON.stringify(txn.metadata || {})
+        JSON.stringify(txn.metadata || {}), merchantKey
       );
 
       if (result.changes > 0) inserted++;
@@ -106,6 +120,7 @@ export function getTransactions(
     currency: row.currency,
     name: row.name,
     merchant_name: row.merchant_name,
+    merchant_key: row.merchant_key || null,
     category_primary: row.category_primary,
     category_detailed: row.category_detailed,
     pending: !!row.pending,
