@@ -234,11 +234,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (backendConnected) {
         try {
           response = await sendChatMessageAPI(message);
-        } catch {
+        } catch (error: any) {
+          // Log the error for debugging
+          console.error('[Chat] API call failed, falling back to local:', error.message);
           // Fallback to local
           response = await generateChatResponse(message, transactions, chatMessages);
         }
       } else {
+        console.warn('[Chat] Backend not connected, using local response');
         response = await generateChatResponse(message, transactions, chatMessages);
       }
 

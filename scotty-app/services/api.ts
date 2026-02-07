@@ -9,9 +9,63 @@ import {
 } from '../types';
 
 // Configure this to point to your backend
-const API_BASE_URL = __DEV__
-  ? 'http://localhost:3001/api'
-  : 'http://localhost:3001/api';
+// 
+// IMPORTANT: For Expo Go on physical devices, you MUST use your computer's IP address!
+// 
+// Set the IP via environment variable:
+//   EXPO_PUBLIC_API_HOST=192.168.1.100 npx expo start
+//
+// Or find your IP manually:
+//   Mac/Linux: ifconfig | grep "inet " | grep -v 127.0.0.1
+//   Windows: ipconfig (look for IPv4 Address)
+//
+// Make sure:
+// - Your phone and computer are on the same Wi-Fi network
+// - Your firewall allows connections on port 3001
+// - The backend server is running
+
+import { Platform } from 'react-native';
+
+// Get IP from environment variable, or default to localhost
+// Set it when starting Expo: EXPO_PUBLIC_API_HOST=192.168.1.100 npx expo start
+const YOUR_COMPUTER_IP = process.env.EXPO_PUBLIC_API_HOST || 'localhost';
+
+const getApiBaseUrl = () => {
+  // For web, always use localhost
+  if (typeof window !== 'undefined') {
+    return 'http://localhost:3001/api';
+  }
+  
+  // For mobile
+  if (Platform.OS === 'android') {
+    // Android emulator: use 10.0.2.2 to access host machine
+    // Physical device (Expo Go): use your computer's IP
+    if (__DEV__) {
+      // Check if we're in an emulator (10.0.2.2) or physical device (needs IP)
+      return YOUR_COMPUTER_IP === 'localhost' 
+        ? 'http://10.0.2.2:3001/api' // Android emulator
+        : `http://${YOUR_COMPUTER_IP}:3001/api`; // Physical device
+    }
+    return 'http://localhost:3001/api';
+  } else {
+    // iOS simulator: localhost works
+    // Physical device (Expo Go): use your computer's IP
+    if (__DEV__) {
+      return YOUR_COMPUTER_IP === 'localhost'
+        ? 'http://localhost:3001/api' // iOS simulator
+        : `http://${YOUR_COMPUTER_IP}:3001/api`; // Physical device
+    }
+    return 'http://localhost:3001/api';
+  }
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+// Log the API URL for debugging (only in dev mode on mobile)
+if (__DEV__ && typeof window === 'undefined') {
+  console.log(`[API] API_BASE_URL configured as: ${API_BASE_URL}`);
+  console.log(`[API] EXPO_PUBLIC_API_HOST: ${process.env.EXPO_PUBLIC_API_HOST || 'not set'}`);
+}
 
 // Default user for prototype (matches seed data)
 const DEFAULT_USER_ID = 'user_1';
@@ -57,20 +111,36 @@ function mapCategory(backendCategory: string | null): TransactionCategory {
 // ─── API Helpers ───
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`API ${response.status}: ${body}`);
+  
+  // Log for debugging on mobile
+  if (__DEV__ && typeof window === 'undefined') {
+    console.log(`[API] Fetching: ${url}`);
   }
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    });
 
-  return response.json();
+    if (!response.ok) {
+      const body = await response.text();
+      const error = `API ${response.status}: ${body}`;
+      console.error(`[API] Error: ${error}`);
+      throw new Error(error);
+    }
+
+    return response.json();
+  } catch (error: any) {
+    // Log network errors for debugging
+    if (__DEV__ && typeof window === 'undefined') {
+      console.error(`[API] Network error for ${url}:`, error.message);
+    }
+    throw error;
+  }
 }
 
 // ─── Transaction Mapping ───
@@ -270,14 +340,31 @@ export function mapInsightToFrontend(
  */
 export async function checkBackendHealth(): Promise<boolean> {
   try {
+    const healthUrl = `${API_BASE_URL.replace('/api', '')}/health`;
+    
+    // Log for debugging on mobile
+    if (__DEV__ && typeof window === 'undefined') {
+      console.log(`[API] Health check: ${healthUrl}`);
+    }
+    
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const response = await fetch(`${API_BASE_URL.replace('/api', '')}/health`, {
+    const timeout = setTimeout(() => controller.abort(), 5000); // Increased timeout for mobile
+    const response = await fetch(healthUrl, {
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    return response.ok;
-  } catch {
+    
+    const isHealthy = response.ok;
+    if (__DEV__ && typeof window === 'undefined') {
+      console.log(`[API] Health check result: ${isHealthy ? 'OK' : 'FAILED'} (${response.status})`);
+    }
+    
+    return isHealthy;
+  } catch (error: any) {
+    if (__DEV__ && typeof window === 'undefined') {
+      console.error(`[API] Health check error:`, error.message);
+      console.error(`[API] API_BASE_URL was: ${API_BASE_URL}`);
+    }
     return false;
   }
 }
