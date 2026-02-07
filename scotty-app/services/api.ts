@@ -6,6 +6,7 @@ import {
   HealthMetrics,
   DailyInsight,
   FoodType,
+  UserProfile,
 } from '../types';
 
 // Configure this to point to your backend
@@ -219,6 +220,31 @@ export async function fetchDailyPayload(): Promise<DailyPayload> {
 
 export async function fetchHealthMetrics(): Promise<HealthMetrics> {
   return apiFetch<HealthMetrics>(`/v1/health-metrics?user_id=${DEFAULT_USER_ID}`);
+}
+
+export async function fetchUserProfile(): Promise<UserProfile> {
+  const data = await apiFetch<{
+    monthly_budget: number;
+    monthly_savings_goal: number;
+    current_balance: number;
+  }>(`/v1/profile?user_id=${DEFAULT_USER_ID}`);
+
+  return {
+    monthlyBudget: data.monthly_budget,
+    monthlySavingsGoal: data.monthly_savings_goal,
+    currentBalance: data.current_balance,
+  };
+}
+
+export interface BudgetProgress {
+  category: string;
+  amount: number;
+  spent: number;
+  period: 'monthly' | 'weekly' | string;
+}
+
+export async function fetchBudgets(): Promise<BudgetProgress[]> {
+  return apiFetch<BudgetProgress[]>(`/v1/budgets?user_id=${DEFAULT_USER_ID}`);
 }
 
 export async function fetchScottyState(): Promise<ScottyState> {

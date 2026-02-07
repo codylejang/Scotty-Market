@@ -10,7 +10,7 @@ import {
 import { useApp } from '@/context/AppContext';
 import TransactionList from '@/components/TransactionList';
 import SpendingChart from '@/components/SpendingChart';
-import { getSpendingByCategory, getTotalSpending } from '@/services/mockData';
+import { getSpendingByCategory, getTotalSpending } from '@/services/transactionMetrics';
 
 type TabType = 'transactions' | 'analytics' | 'health';
 

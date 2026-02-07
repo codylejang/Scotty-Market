@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,13 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { useApp } from '@/context/AppContext';
+import { fetchBudgets } from '@/services/api';
+import {
+  getTotalSpending,
+  getTopSpendingCategories,
+} from '@/services/transactionMetrics';
+import { TransactionCategory } from '@/types';
 
 function PixelScotty({ size }: { size: number }) {
   return (
@@ -45,7 +52,100 @@ function PixelScotty({ size }: { size: number }) {
 }
 
 export default function ScottyHomeScreen() {
+  const { dailyInsight, scottyState, profile, transactions } = useApp();
   const [activeBudgetTab, setActiveBudgetTab] = useState<'Daily' | 'Weekly' | 'Monthly'>('Daily');
+  const [budgets, setBudgets] = useState<Array<{
+    category: string;
+    amount: number;
+    spent: number;
+    period: string;
+  }>>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchBudgets()
+      .then((rows) => {
+        if (isMounted) setBudgets(rows);
+      })
+      .catch(() => {
+        if (isMounted) setBudgets([]);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const monthlyTotal = useMemo(() => getTotalSpending(transactions, 30), [transactions]);
+  const budgetDelta = profile.monthlyBudget - monthlyTotal;
+  const happinessPct = Math.max(0, Math.min(100, scottyState.happiness));
+
+  const todaySpending = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return transactions
+      .filter((tx) => tx.date.toISOString().slice(0, 10) === today)
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  }, [transactions]);
+
+  const topCategoryCounts = useMemo(() => {
+    const now = new Date();
+    const weekAgo = new Date(now);
+    weekAgo.setDate(now.getDate() - 7);
+    const counts: Partial<Record<TransactionCategory, number>> = {};
+    for (const tx of transactions) {
+      if (tx.date < weekAgo) continue;
+      counts[tx.category] = (counts[tx.category] || 0) + 1;
+    }
+    return Object.entries(counts)
+      .sort(([, a], [, b]) => (b || 0) - (a || 0))
+      .slice(0, 3)
+      .map(([category, count]) => ({
+        category: category as TransactionCategory,
+        count: count || 0,
+      }));
+  }, [transactions]);
+
+  const fallbackBudgetCards = useMemo(() => {
+    return getTopSpendingCategories(transactions, 3).map((item) => ({
+      category: formatCategoryName(item.category),
+      amount: Math.max(50, Math.round(item.amount * 1.2)),
+      spent: item.amount,
+      period: 'monthly',
+    }));
+  }, [transactions]);
+
+  const displayBudgets =
+    budgets.length > 0
+      ? budgets
+      : fallbackBudgetCards.length > 0
+      ? fallbackBudgetCards
+      : [
+          { category: 'Entertainment', amount: 100, spent: 0, period: 'monthly' },
+          { category: 'Food & Drink', amount: 400, spent: 0, period: 'monthly' },
+          { category: 'Shopping', amount: 200, spent: 0, period: 'monthly' },
+        ];
+
+  const heroIcons = [0, 1, 2].map((idx) => {
+    const category = topCategoryCounts[idx]?.category || 'other';
+    const count = topCategoryCounts[idx]?.count || 0;
+    return { emoji: categoryEmoji(category), count };
+  });
+
+  const goalCards = displayBudgets.slice(0, 3);
+  const dashboardCards = displayBudgets.slice(0, 3).map((item) => {
+    const scale = getBudgetScale(activeBudgetTab, new Date());
+    const amount = Math.max(1, item.amount * scale);
+    const spent = item.spent * scale;
+    const progressPct = Math.max(0, Math.min(100, (spent / amount) * 100));
+    const projectedPct = Math.max(0, Math.round((projectProjectedSpent(item.spent) / Math.max(1, item.amount)) * 100));
+    return {
+      ...item,
+      amount,
+      spent,
+      progressPct,
+      projectedPct,
+      warning: projectedPct > 100,
+    };
+  });
 
   return (
     <ScrollView
@@ -56,7 +156,9 @@ export default function ScottyHomeScreen() {
       {/* Hero Section */}
       <View style={styles.heroSection}>
         <View style={styles.speechBubble}>
-          <Text style={styles.speechText}>"Save some kibble for later!"</Text>
+          <Text style={styles.speechText}>
+            "{dailyInsight?.message || 'Save some kibble for later!'}"
+          </Text>
           <View style={styles.speechTail} />
         </View>
 
@@ -69,21 +171,21 @@ export default function ScottyHomeScreen() {
 
           <View style={styles.categoryIcons}>
             <View style={[styles.iconCard, styles.iconCardPurple]}>
-              <Text style={styles.iconEmoji}>☕</Text>
+              <Text style={styles.iconEmoji}>{heroIcons[0].emoji}</Text>
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>1x</Text>
+                <Text style={styles.badgeText}>{heroIcons[0].count}x</Text>
               </View>
             </View>
             <View style={[styles.iconCard, styles.iconCardYellow]}>
-              <Text style={styles.iconEmoji}>🍴</Text>
+              <Text style={styles.iconEmoji}>{heroIcons[1].emoji}</Text>
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>4x</Text>
+                <Text style={styles.badgeText}>{heroIcons[1].count}x</Text>
               </View>
             </View>
             <View style={[styles.iconCard, styles.iconCardGreen]}>
-              <Text style={styles.iconEmoji}>🐾</Text>
+              <Text style={styles.iconEmoji}>{heroIcons[2].emoji}</Text>
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>3x</Text>
+                <Text style={styles.badgeText}>{heroIcons[2].count}x</Text>
               </View>
             </View>
           </View>
@@ -93,14 +195,14 @@ export default function ScottyHomeScreen() {
         <View style={styles.happinessContainer}>
           <View style={styles.meterHeader}>
             <Text style={styles.meterLabel}>SCOTTY HAPPINESS</Text>
-            <Text style={styles.meterValue}>82%</Text>
+            <Text style={styles.meterValue}>{happinessPct}%</Text>
           </View>
           <View style={styles.meterContainer}>
             <LinearGradient
               colors={['#ff6b6b', '#9b59b6']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={[styles.meterFill, { width: '82%' }]}
+              style={[styles.meterFill, { width: `${happinessPct}%` }]}
             />
           </View>
         </View>
@@ -108,60 +210,51 @@ export default function ScottyHomeScreen() {
 
       {/* Savings Goals Section */}
       <View style={styles.section}>
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <View style={styles.goalIcon}>
-              <Text style={styles.goalIconText}>🍖</Text>
+        {goalCards.map((item, idx) => {
+          const pct = Math.max(0, Math.min(100, (item.spent / Math.max(1, item.amount)) * 100));
+          const iconStyle = idx === 1 ? styles.goalIconBlue : idx === 2 ? styles.goalIconGreen : undefined;
+          const barStyle = idx === 1 ? styles.progressPurple : idx === 2 ? styles.progressBlue : styles.progressOrange;
+          return (
+            <View key={`${item.category}_${idx}`} style={styles.goalCard}>
+              <View style={styles.goalHeader}>
+                <View style={[styles.goalIcon, iconStyle]}>
+                  <Text style={styles.goalIconText}>{categoryEmojiFromName(item.category)}</Text>
+                </View>
+                <Text style={styles.goalTitle}>{item.category.toUpperCase()} FUND</Text>
+              </View>
+              <Text style={styles.goalAmount}>${item.spent.toFixed(0)} / ${item.amount.toFixed(0)}</Text>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, barStyle, { width: `${pct}%` }]} />
+              </View>
             </View>
-            <Text style={styles.goalTitle}>JUICY MEAT FUND</Text>
-          </View>
-          <Text style={styles.goalAmount}>$45 / $60</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressOrange, { width: '75%' }]} />
-          </View>
-        </View>
-
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <View style={[styles.goalIcon, styles.goalIconBlue]}>
-              <Text style={styles.goalIconText}>☕</Text>
-            </View>
-            <Text style={styles.goalTitle}>BOBA RUN SAVINGS</Text>
-          </View>
-          <Text style={styles.goalAmount}>$12 / $30</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressPurple, { width: '40%' }]} />
-          </View>
-        </View>
-
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <View style={[styles.goalIcon, styles.goalIconGreen]}>
-              <Text style={styles.goalIconText}>🍦</Text>
-            </View>
-            <Text style={styles.goalTitle}>ICE CREAM PARTY</Text>
-          </View>
-          <Text style={styles.goalAmount}>$24 / $25</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressBlue, { width: '96%' }]} />
-          </View>
-        </View>
+          );
+        })}
       </View>
 
       {/* Summary Cards */}
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>DAILY SPEND</Text>
-          <Text style={styles.summaryValueLarge}>$42.50</Text>
+          <Text style={styles.summaryValueLarge}>${todaySpending.toFixed(2)}</Text>
           <View style={styles.smallProgressBar}>
-            <View style={[styles.smallProgressFill, { width: '65%' }]} />
+            <View
+              style={[
+                styles.smallProgressFill,
+                { width: `${Math.min(100, (todaySpending / Math.max(1, profile.monthlyBudget / 30)) * 100)}%` },
+              ]}
+            />
           </View>
         </View>
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>BANK TOTAL</Text>
-          <Text style={[styles.summaryValueLarge, styles.summaryValuePurple]}>$2,410</Text>
-          <Text style={styles.todayIncome}>↗ +$120 today</Text>
+          <Text style={[styles.summaryValueLarge, styles.summaryValuePurple]}>
+            ${profile.currentBalance.toFixed(0)}
+          </Text>
+          <Text style={styles.todayIncome}>
+            {budgetDelta >= 0 ? '↗' : '↘'} {budgetDelta >= 0 ? '+' : '-'}$
+            {Math.abs(budgetDelta).toFixed(0)} this month
+          </Text>
         </View>
       </View>
 
@@ -194,50 +287,82 @@ export default function ScottyHomeScreen() {
           ))}
         </View>
 
-        <View style={styles.budgetCard}>
-          <View style={styles.budgetCategoryHeader}>
-            <View style={styles.budgetCategoryLeft}>
-              <Text style={styles.budgetEmoji}>🎭</Text>
-              <Text style={styles.budgetCategoryName}>Entertainment</Text>
+        {dashboardCards.map((item, idx) => {
+          const barStyle = idx === 0 ? styles.progressPurple : idx === 1 ? styles.progressOrange : styles.progressBlue;
+          return (
+            <View key={`${item.category}_dashboard_${idx}`} style={styles.budgetCard}>
+              <View style={styles.budgetCategoryHeader}>
+                <View style={styles.budgetCategoryLeft}>
+                  <Text style={styles.budgetEmoji}>{categoryEmojiFromName(item.category)}</Text>
+                  <Text style={styles.budgetCategoryName}>{item.category}</Text>
+                </View>
+                <Text style={styles.budgetCategoryAmount}>
+                  ${item.spent.toFixed(2)} / ${item.amount.toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, barStyle, { width: `${item.progressPct}%` }]} />
+              </View>
+              <Text style={[styles.budgetProjection, item.warning && styles.budgetProjectionWarning]}>
+                Projected End: {item.projectedPct}%
+              </Text>
             </View>
-            <Text style={styles.budgetCategoryAmount}>$45.00 / $60.00</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressPurple, { width: '75%' }]} />
-          </View>
-          <Text style={styles.budgetProjection}>Projected End: 92%</Text>
-        </View>
-
-        <View style={styles.budgetCard}>
-          <View style={styles.budgetCategoryHeader}>
-            <View style={styles.budgetCategoryLeft}>
-              <Text style={styles.budgetEmoji}>🍔</Text>
-              <Text style={styles.budgetCategoryName}>Dining Out</Text>
-            </View>
-            <Text style={styles.budgetCategoryAmount}>$112.00 / $120.00</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressOrange, { width: '93%' }]} />
-          </View>
-          <Text style={[styles.budgetProjection, styles.budgetProjectionWarning]}>Projected End: 115%</Text>
-        </View>
-
-        <View style={styles.budgetCard}>
-          <View style={styles.budgetCategoryHeader}>
-            <View style={styles.budgetCategoryLeft}>
-              <Text style={styles.budgetEmoji}>🛍️</Text>
-              <Text style={styles.budgetCategoryName}>Shopping</Text>
-            </View>
-            <Text style={styles.budgetCategoryAmount}>$20.00 / $150.00</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressBlue, { width: '15%' }]} />
-          </View>
-          <Text style={styles.budgetProjection}>Projected End: 40%</Text>
-        </View>
+          );
+        })}
       </View>
     </ScrollView>
   );
+}
+
+function getBudgetScale(tab: 'Daily' | 'Weekly' | 'Monthly', now: Date): number {
+  if (tab === 'Monthly') return 1;
+  if (tab === 'Weekly') return 1 / 4.345;
+
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return 1 / daysInMonth;
+}
+
+function projectProjectedSpent(currentSpent: number): number {
+  const now = new Date();
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const elapsed = Math.max(0.1, dayOfMonth / daysInMonth);
+  return currentSpent / elapsed;
+}
+
+function formatCategoryName(category: string): string {
+  return category
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (s) => s.toUpperCase());
+}
+
+function categoryEmoji(category: TransactionCategory): string {
+  const byCategory: Record<TransactionCategory, string> = {
+    food_dining: '🍔',
+    groceries: '🛒',
+    transport: '🚗',
+    entertainment: '🎭',
+    shopping: '🛍️',
+    subscriptions: '📺',
+    utilities: '💡',
+    education: '📚',
+    health: '💊',
+    other: '🐾',
+  };
+  return byCategory[category];
+}
+
+function categoryEmojiFromName(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.includes('food') || lower.includes('dining')) return '🍔';
+  if (lower.includes('shop')) return '🛍️';
+  if (lower.includes('entertain')) return '🎭';
+  if (lower.includes('transport') || lower.includes('travel')) return '🚗';
+  if (lower.includes('groc')) return '🛒';
+  if (lower.includes('util')) return '💡';
+  if (lower.includes('subscript')) return '📺';
+  if (lower.includes('health')) return '💊';
+  return '🐾';
 }
 
 const styles = StyleSheet.create({

@@ -10,21 +10,18 @@ import {
   FoodType,
 } from '../types';
 import {
-  generateTransactionHistory,
-  generateUserProfile,
-  generateSampleAchievements,
-} from '../services/mockData';
-import {
   calculateHealthMetrics,
   calculateScottyState,
 } from '../services/healthScore';
 import { generateDailyInsight, generateChatResponse } from '../services/ai';
+import { getSpendingByCategory } from '../services/transactionMetrics';
 import {
   checkBackendHealth,
   fetchDailyPayload,
   fetchTransactions,
   fetchHealthMetrics,
   fetchScottyState,
+  fetchUserProfile,
   feedScottyAPI,
   sendChatMessageAPI,
   fetchActiveQuest,
@@ -74,6 +71,12 @@ const defaultScottyState: ScottyState = {
   foodCredits: 10,
 };
 
+const defaultProfile: UserProfile = {
+  monthlyBudget: 1500,
+  monthlySavingsGoal: 300,
+  currentBalance: 2400,
+};
+
 const defaultHealthMetrics: HealthMetrics = {
   budgetAdherence: 70,
   savingsRate: 50,
@@ -83,12 +86,42 @@ const defaultHealthMetrics: HealthMetrics = {
 
 const AppContext = createContext<AppState | null>(null);
 
+function buildLocalAchievements(transactions: Transaction[]): Achievement[] {
+  const spending = getSpendingByCategory(transactions);
+  const topCategory = Object.entries(spending)
+    .filter(([, amount]) => amount > 0)
+    .sort(([, a], [, b]) => b - a)[0];
+
+  const achievements: Achievement[] = [];
+  if (topCategory) {
+    const [category, amount] = topCategory;
+    achievements.push({
+      id: `top_cat_${Date.now()}`,
+      title: `Reduce ${category.replace('_', ' ')} spending`,
+      description: `You spent $${amount.toFixed(0)} in ${category.replace('_', ' ')} this month. Aim to cut 20%.`,
+      targetAmount: Math.round(amount * 0.8),
+      currentAmount: amount,
+      completed: false,
+      aiGenerated: true,
+    });
+  }
+
+  achievements.push({
+    id: `weekend_${Date.now()}`,
+    title: 'Weekend Saver',
+    description: 'Keep weekend spending under $50 for dining and entertainment.',
+    targetAmount: 50,
+    currentAmount: 0,
+    completed: false,
+    aiGenerated: true,
+  });
+
+  return achievements;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  // Initialize with mock data (used as fallback)
-  const [profile] = useState<UserProfile>(() => generateUserProfile());
-  const [transactions, setTransactions] = useState<Transaction[]>(() =>
-    generateTransactionHistory(30, 3)
-  );
+  const [profile, setProfile] = useState<UserProfile>(defaultProfile);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [scottyState, setScottyState] = useState<ScottyState>(defaultScottyState);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics>(defaultHealthMetrics);
@@ -103,15 +136,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
   ]);
 
-  // Initialize on mount: show mock data immediately, then try backend in background
+  // Initialize on mount from backend, with local fallback if unavailable.
   useEffect(() => {
-    // Show something right away
-    initializeFromMock();
-    // Then try to upgrade to backend data (non-blocking)
-    tryBackendUpgrade();
+    initializeApp();
   }, []);
 
-  function initializeFromMock() {
+  function initializeFallbackState() {
     const metrics = calculateHealthMetrics({
       transactions,
       monthlyBudget: profile.monthlyBudget,
@@ -123,35 +153,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const scotty = calculateScottyState(metrics, null, 10);
     setScottyState(scotty);
 
-    const newAchievements = generateSampleAchievements(transactions);
-    setAchievements(newAchievements);
+    if (achievements.length === 0) {
+      setAchievements(buildLocalAchievements(transactions));
+    }
 
     generateDailyInsight(transactions).then(setDailyInsight);
   }
 
-  async function tryBackendUpgrade() {
+  async function initializeApp() {
     const isHealthy = await checkBackendHealth();
-    if (!isHealthy) return;
+    if (!isHealthy) {
+      initializeFallbackState();
+      return;
+    }
     setBackendConnected(true);
 
-    // Fetch backend data with a global timeout so the app never hangs
     try {
       await withTimeout(loadFromBackend(), 15000);
     } catch (err) {
-      console.warn('[AppContext] Backend upgrade failed, keeping mock data:', err);
+      console.warn('[AppContext] Backend upgrade failed, using fallback state:', err);
       setBackendConnected(false);
+      initializeFallbackState();
     }
   }
 
   async function loadFromBackend() {
-    // Fetch non-blocking data first (fast endpoints)
-    const [txns, metrics, scotty] = await Promise.all([
+    const [txns, metrics, scotty, userProfile] = await Promise.all([
       fetchTransactions(30),
       fetchHealthMetrics(),
       fetchScottyState(),
+      fetchUserProfile(),
     ]);
 
-    if (txns.length > 0) setTransactions(txns);
+    setTransactions(txns);
+    setProfile(userProfile);
     setScottyState(scotty);
     setHealthMetrics(metrics);
 
@@ -168,7 +203,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Quest -> achievement mapping
     try {
       const questAchievement = await fetchActiveQuest();
-      const baseAchievements = generateSampleAchievements(txns.length > 0 ? txns : transactions);
+      const baseAchievements = buildLocalAchievements(txns);
       if (questAchievement) {
         setAchievements([questAchievement, ...baseAchievements.slice(0, 2)]);
       } else {
