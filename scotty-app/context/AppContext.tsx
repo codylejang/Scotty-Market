@@ -20,6 +20,17 @@ import {
   calculateDailyCredits,
 } from '../services/healthScore';
 import { generateDailyInsight, generateChatResponse } from '../services/ai';
+import {
+  checkBackendHealth,
+  fetchDailyPayload,
+  fetchTransactions,
+  fetchHealthMetrics,
+  fetchScottyState,
+  feedScottyAPI,
+  sendChatMessageAPI,
+  fetchActiveQuest,
+  mapInsightToFrontend,
+} from '../services/api';
 
 interface AppState {
   // User data
@@ -34,6 +45,9 @@ interface AppState {
 
   // Chat
   chatMessages: ChatMessage[];
+
+  // Connection status
+  backendConnected: boolean;
 
   // Actions
   feedScotty: (type: FoodType) => void;
@@ -60,25 +74,82 @@ const defaultHealthMetrics: HealthMetrics = {
 const AppContext = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  // Initialize with mock data
+  // Initialize with mock data (used as fallback)
   const [profile] = useState<UserProfile>(() => generateUserProfile());
-  const [transactions] = useState<Transaction[]>(() => generateTransactionHistory(30, 3));
+  const [transactions, setTransactions] = useState<Transaction[]>(() =>
+    generateTransactionHistory(30, 3)
+  );
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [scottyState, setScottyState] = useState<ScottyState>(defaultScottyState);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics>(defaultHealthMetrics);
   const [dailyInsight, setDailyInsight] = useState<DailyInsight | null>(null);
+  const [backendConnected, setBackendConnected] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
       role: 'scotty',
-      content: "Woof! I'm Scotty, your financial buddy! 🐕 Ask me anything about your spending!",
+      content: "Woof! I'm Scotty, your financial buddy! Ask me anything about your spending!",
       timestamp: new Date(),
     },
   ]);
 
-  // Initialize on mount
+  // Initialize on mount - try backend first, fall back to mock
   useEffect(() => {
-    // Calculate initial metrics
+    initializeFromBackend();
+  }, []);
+
+  async function initializeFromBackend() {
+    const isHealthy = await checkBackendHealth();
+    setBackendConnected(isHealthy);
+
+    if (isHealthy) {
+      try {
+        await loadFromBackend();
+        return; // Success - skip mock initialization
+      } catch (err) {
+        console.warn('Backend fetch failed, falling back to mock data:', err);
+        setBackendConnected(false);
+      }
+    }
+
+    // Fallback: use mock data
+    initializeFromMock();
+  }
+
+  async function loadFromBackend() {
+    // Fetch all data in parallel
+    const [txns, payload, metrics, scotty] = await Promise.all([
+      fetchTransactions(30),
+      fetchDailyPayload(),
+      fetchHealthMetrics(),
+      fetchScottyState(),
+    ]);
+
+    // Update transactions
+    if (txns.length > 0) {
+      setTransactions(txns);
+    }
+
+    // Update Scotty state from backend
+    setScottyState(scotty);
+    setHealthMetrics(metrics);
+
+    // Map insights
+    if (payload.insights.length > 0) {
+      setDailyInsight(mapInsightToFrontend(payload.insights[0]));
+    }
+
+    // Map active quest to achievement
+    const questAchievement = await fetchActiveQuest();
+    const mockAchievements = generateSampleAchievements(txns.length > 0 ? txns : transactions);
+    if (questAchievement) {
+      setAchievements([questAchievement, ...mockAchievements.slice(0, 2)]);
+    } else {
+      setAchievements(mockAchievements);
+    }
+  }
+
+  function initializeFromMock() {
     const metrics = calculateHealthMetrics({
       transactions,
       monthlyBudget: profile.monthlyBudget,
@@ -87,20 +158,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     setHealthMetrics(metrics);
 
-    // Calculate Scotty state
     const scotty = calculateScottyState(metrics, null, 10);
     setScottyState(scotty);
 
-    // Generate achievements
     const newAchievements = generateSampleAchievements(transactions);
     setAchievements(newAchievements);
 
-    // Generate daily insight
     generateDailyInsight(transactions).then(setDailyInsight);
-  }, [transactions, profile]);
+  }
 
   // Feed Scotty
-  const feedScotty = (type: FoodType) => {
+  const feedScotty = async (type: FoodType) => {
+    if (backendConnected) {
+      try {
+        const newState = await feedScottyAPI(type);
+        setScottyState(newState);
+        return;
+      } catch (err) {
+        console.warn('Backend feed failed, using local:', err);
+      }
+    }
+
+    // Local fallback
     const cost = type === 'meal' ? 5 : 2;
     const happinessBoost = type === 'meal' ? 15 : 5;
 
@@ -141,7 +220,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Send chat message
   const sendChatMessage = async (message: string) => {
-    // Add user message
     const userMessage: ChatMessage = {
       id: `user_${Date.now()}`,
       role: 'user',
@@ -150,9 +228,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     setChatMessages((prev) => [...prev, userMessage]);
 
-    // Get AI response
     try {
-      const response = await generateChatResponse(message, transactions, chatMessages);
+      let response: string;
+
+      if (backendConnected) {
+        try {
+          response = await sendChatMessageAPI(message);
+        } catch {
+          // Fallback to local
+          response = await generateChatResponse(message, transactions, chatMessages);
+        }
+      } else {
+        response = await generateChatResponse(message, transactions, chatMessages);
+      }
+
       const scottyMessage: ChatMessage = {
         id: `scotty_${Date.now()}`,
         role: 'scotty',
@@ -173,6 +262,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Refresh insight
   const refreshInsight = async () => {
+    if (backendConnected) {
+      try {
+        const payload = await fetchDailyPayload();
+        if (payload.insights.length > 0) {
+          // Pick a random insight from the list for variety
+          const idx = Math.floor(Math.random() * payload.insights.length);
+          setDailyInsight(mapInsightToFrontend(payload.insights[idx]));
+          return;
+        }
+      } catch {
+        // Fall through to mock
+      }
+    }
+
     const insight = await generateDailyInsight(transactions);
     setDailyInsight(insight);
   };
@@ -187,6 +290,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         healthMetrics,
         dailyInsight,
         chatMessages,
+        backendConnected,
         feedScotty,
         completeAchievement,
         dismissAchievement,
