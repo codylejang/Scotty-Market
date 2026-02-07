@@ -53,7 +53,6 @@ export class WorkflowEngine {
   }
 
   private ensureTables() {
-    // Create workflow execution log table if it doesn't exist
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS workflow_execution_log (
         id TEXT PRIMARY KEY,
@@ -67,9 +66,15 @@ export class WorkflowEngine {
         started_at TEXT NOT NULL DEFAULT (datetime('now')),
         completed_at TEXT
       );
-      
+
       CREATE INDEX IF NOT EXISTS idx_workflow_execution_workflow_id ON workflow_execution_log(workflow_id);
       CREATE INDEX IF NOT EXISTS idx_workflow_execution_status ON workflow_execution_log(status);
+
+      CREATE TABLE IF NOT EXISTS idempotency_key (
+        key TEXT PRIMARY KEY,
+        result TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
     `);
   }
 
@@ -83,11 +88,21 @@ export class WorkflowEngine {
     const idempotencyKey = workflow.idempotencyKey(input);
     const db = this.db;
 
-    // Check idempotency - if we've run this workflow with this key before, return cached result
-    const existing = db.prepare('SELECT key, result FROM idempotency_key WHERE key = ?').get(idempotencyKey) as any;
-    if (existing && existing.result) {
-      console.log(`[WorkflowEngine] Idempotency hit for ${workflow.id}:${idempotencyKey}`);
-      return JSON.parse(existing.result);
+    // Atomic idempotency claim: INSERT OR IGNORE so only the first caller wins
+    const insertResult = db.prepare(
+      'INSERT OR IGNORE INTO idempotency_key (key, result) VALUES (?, NULL)'
+    ).run(idempotencyKey);
+
+    if (insertResult.changes === 0) {
+      // Key already existed — another run claimed it. Return cached result if available.
+      const existing = db.prepare('SELECT result FROM idempotency_key WHERE key = ?').get(idempotencyKey) as any;
+      if (existing?.result) {
+        console.log(`[WorkflowEngine] Idempotency hit for ${workflow.id}:${idempotencyKey}`);
+        return JSON.parse(existing.result);
+      }
+      // Key claimed but no result yet (concurrent run in progress) — treat as duplicate
+      console.log(`[WorkflowEngine] Idempotency claimed (in-progress) for ${workflow.id}:${idempotencyKey}`);
+      return {} as TOutput;
     }
 
     const workflowId = uuid();
@@ -112,52 +127,40 @@ export class WorkflowEngine {
         const step = workflow.steps[i];
         currentStepName = step.name;
 
-        // Update current step in log
         db.prepare(`
-          UPDATE workflow_execution_log 
-          SET current_step = ? 
-          WHERE id = ?
+          UPDATE workflow_execution_log SET current_step = ? WHERE id = ?
         `).run(currentStepName, executionId);
 
         console.log(`[WorkflowEngine] Executing step: ${workflow.id} -> ${currentStepName}`);
 
-        // Execute step with retry logic
         const stepOutput = await this.executeStep(step, lastOutput, context);
         lastOutput = stepOutput;
-
-        // Check timeout if specified
-        if (step.timeoutMs) {
-          // Timeout is handled by the step execution wrapper
-        }
       }
 
       // Mark workflow as completed
       db.prepare(`
-        UPDATE workflow_execution_log 
-        SET status = 'COMPLETED', 
-            current_step = NULL,
-            output_summary = ?,
-            completed_at = datetime('now')
+        UPDATE workflow_execution_log
+        SET status = 'COMPLETED', current_step = NULL, output_summary = ?, completed_at = datetime('now')
         WHERE id = ?
       `).run(JSON.stringify(this.summarizeInput(lastOutput)), executionId);
 
-      // Store result for idempotency
-      db.prepare('INSERT INTO idempotency_key (key, result) VALUES (?, ?)')
-        .run(idempotencyKey, JSON.stringify(lastOutput));
+      // Store result for idempotency (UPDATE the placeholder row)
+      db.prepare('UPDATE idempotency_key SET result = ? WHERE key = ?')
+        .run(JSON.stringify(lastOutput), idempotencyKey);
 
       console.log(`[WorkflowEngine] Workflow ${workflow.id} completed successfully`);
       return lastOutput as TOutput;
     } catch (error: any) {
       const errorMessage = error?.message || String(error);
 
-      // Mark workflow as failed
       db.prepare(`
-        UPDATE workflow_execution_log 
-        SET status = 'FAILED', 
-            error = ?,
-            completed_at = datetime('now')
+        UPDATE workflow_execution_log
+        SET status = 'FAILED', error = ?, completed_at = datetime('now')
         WHERE id = ?
       `).run(errorMessage, executionId);
+
+      // Remove the idempotency placeholder so the workflow can be retried
+      db.prepare('DELETE FROM idempotency_key WHERE key = ? AND result IS NULL').run(idempotencyKey);
 
       console.error(`[WorkflowEngine] Workflow ${workflow.id} failed at step ${currentStepName}:`, errorMessage);
       throw new Error(`Workflow ${workflow.id} failed at step ${currentStepName}: ${errorMessage}`);
