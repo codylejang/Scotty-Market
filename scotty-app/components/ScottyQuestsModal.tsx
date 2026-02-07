@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,67 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Quest } from '../types';
+
+function ModalQuestCard({ quest }: { quest: Quest }) {
+  const [showInfo, setShowInfo] = useState(false);
+  const progressPercent = (quest.progress / quest.goal) * 100;
+  const isComplete = quest.progress >= quest.goal;
+
+  return (
+    <View style={styles.questCard}>
+      <View style={styles.questContent}>
+        {/* Icon Section */}
+        <View style={styles.iconSection}>
+          <TouchableOpacity
+            style={styles.infoButton}
+            onPress={() => setShowInfo(!showInfo)}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Text style={styles.infoButtonText}>{showInfo ? '✕' : 'i'}</Text>
+          </TouchableOpacity>
+          <View style={[styles.iconBox, { backgroundColor: quest.bgColor }]}>
+            <Text style={styles.iconEmoji}>{quest.emoji}</Text>
+          </View>
+        </View>
+
+        {/* Details Section */}
+        <View style={styles.detailsSection}>
+          <View style={styles.questHeader}>
+            <Text style={styles.questTitle}>{quest.title}</Text>
+            <Text style={styles.xpReward}>+{quest.xpReward} XP</Text>
+          </View>
+          <Text style={styles.questSubtitle}>{quest.subtitle}</Text>
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBarBg}>
+              <View
+                style={[
+                  styles.progressBarFill,
+                  { width: `${Math.min(progressPercent, 100)}%` },
+                ]}
+              />
+            </View>
+          </View>
+          <Text
+            style={[
+              styles.progressText,
+              isComplete && styles.progressTextComplete,
+            ]}
+          >
+            {quest.progress}/{quest.goal} {quest.progressUnit}
+          </Text>
+          {showInfo && (
+            <View style={styles.infoBox}>
+              <Text style={styles.infoBoxText}>{quest.subtitle}</Text>
+              {quest.goalTarget ? (
+                <Text style={styles.infoBoxGoal}>Contributes to: {quest.goalTarget}</Text>
+              ) : null}
+            </View>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
 
 interface ScottyQuestsModalProps {
   visible: boolean;
@@ -83,54 +144,9 @@ export default function ScottyQuestsModal({
             contentContainerStyle={styles.questListContent}
             showsVerticalScrollIndicator={false}
           >
-            {quests.map((quest) => {
-              const progressPercent = (quest.progress / quest.goal) * 100;
-              const isComplete = quest.progress >= quest.goal;
-
-              return (
-                <View key={quest.id} style={styles.questCard}>
-                  <View style={styles.questContent}>
-                    {/* Icon Section */}
-                    <View style={styles.iconSection}>
-                      <View style={styles.pauseButton}>
-                        <View style={styles.pauseBar} />
-                        <View style={styles.pauseBar} />
-                      </View>
-                      <View style={[styles.iconBox, { backgroundColor: quest.bgColor }]}>
-                        <Text style={styles.iconEmoji}>{quest.emoji}</Text>
-                      </View>
-                    </View>
-
-                    {/* Details Section */}
-                    <View style={styles.detailsSection}>
-                      <View style={styles.questHeader}>
-                        <Text style={styles.questTitle}>{quest.title}</Text>
-                        <Text style={styles.xpReward}>+{quest.xpReward} XP</Text>
-                      </View>
-                      <Text style={styles.questSubtitle}>{quest.subtitle}</Text>
-                      <View style={styles.progressContainer}>
-                        <View style={styles.progressBarBg}>
-                          <View
-                            style={[
-                              styles.progressBarFill,
-                              { width: `${Math.min(progressPercent, 100)}%` },
-                            ]}
-                          />
-                        </View>
-                      </View>
-                      <Text
-                        style={[
-                          styles.progressText,
-                          isComplete && styles.progressTextComplete,
-                        ]}
-                      >
-                        {quest.progress}/{quest.goal} {quest.progressUnit}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
+            {quests.map((quest) => (
+              <ModalQuestCard key={quest.id} quest={quest} />
+            ))}
           </ScrollView>
 
           {/* Footer */}
@@ -258,23 +274,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  pauseButton: {
-    width: 32,
-    height: 32,
-    backgroundColor: '#ddd',
-    borderRadius: 8,
+  infoButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: '#000',
-    flexDirection: 'row',
+    backgroundColor: '#fff9c4',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
     marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
   },
-  pauseBar: {
-    width: 4,
-    height: 14,
-    backgroundColor: '#666',
+  infoButtonText: {
+    fontFamily: FONT,
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#000',
   },
   iconBox: {
     width: 80,
@@ -403,5 +423,28 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     letterSpacing: 1,
+  },
+  infoBox: {
+    marginTop: 10,
+    backgroundColor: '#fff9c4',
+    borderWidth: 2,
+    borderColor: '#000',
+    borderRadius: 10,
+    padding: 10,
+  },
+  infoBoxText: {
+    fontFamily: FONT,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#000',
+    lineHeight: 16,
+  },
+  infoBoxGoal: {
+    fontFamily: FONT,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#9b59b6',
+    marginTop: 6,
+    letterSpacing: 0.5,
   },
 });

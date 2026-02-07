@@ -64,6 +64,52 @@ const getDailyLimit = (budget: BudgetItem) => {
   return budget.limitAmount / 30;
 };
 
+function QuestCard({ quest, index }: { quest: Quest; index: number }) {
+  const [showInfo, setShowInfo] = useState(false);
+  const percent = quest.goal > 0
+    ? Math.min(100, Math.round((quest.progress / quest.goal) * 100))
+    : 0;
+  const colors = ['#ff8a65', '#9b59b6', '#81d4fa'];
+  const iconStyles = [undefined, styles.goalIconBlue, styles.goalIconGreen];
+
+  return (
+    <View style={styles.goalCard}>
+      <View style={styles.goalHeader}>
+        <View style={[styles.goalIcon, iconStyles[index]]}>
+          <Text style={styles.goalIconText}>{quest.emoji}</Text>
+        </View>
+        <Text style={styles.goalTitle} numberOfLines={2}>{quest.title.toUpperCase()}</Text>
+        <TouchableOpacity
+          style={styles.questInfoButton}
+          onPress={() => setShowInfo(!showInfo)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.questInfoButtonText}>{showInfo ? '✕' : 'i'}</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.goalAmount}>
+        {quest.goal > 0
+          ? `$${quest.progress.toFixed(0)} / $${quest.goal.toFixed(0)}`
+          : `${quest.progress} ${quest.progressUnit}`}
+      </Text>
+      <AnimatedProgressBar
+        targetPercent={percent}
+        color={colors[index % colors.length]}
+        delay={100 + index * 150}
+      />
+      {showInfo && (
+        <View style={styles.questInfoBox}>
+          <Text style={styles.questInfoText}>{quest.subtitle}</Text>
+          {quest.goalTarget ? (
+            <Text style={styles.questInfoGoal}>Goal: {quest.goalTarget}</Text>
+          ) : null}
+          <Text style={styles.questInfoXp}>+{quest.xpReward} XP</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 interface ScottyHomeScreenProps {
   showQuestsModal?: boolean;
   onCloseQuestsModal?: () => void;
@@ -382,33 +428,9 @@ export default function ScottyHomeScreen({
         <View style={styles.section}>
           <Text style={styles.sectionHeaderTitle}>DAILY QUESTS</Text>
 
-          {quests.slice(0, 3).map((quest, index) => {
-            const percent = quest.goal > 0
-              ? Math.min(100, Math.round((quest.progress / quest.goal) * 100))
-              : 0;
-            const colors = ['#ff8a65', '#9b59b6', '#81d4fa'];
-            const iconStyles = [undefined, styles.goalIconBlue, styles.goalIconGreen];
-            return (
-              <View key={quest.id} style={styles.goalCard}>
-                <View style={styles.goalHeader}>
-                  <View style={[styles.goalIcon, iconStyles[index]]}>
-                    <Text style={styles.goalIconText}>{quest.emoji}</Text>
-                  </View>
-                  <Text style={styles.goalTitle}>{quest.title.toUpperCase()}</Text>
-                </View>
-                <Text style={styles.goalAmount}>
-                  {quest.goal > 0
-                    ? `$${quest.progress.toFixed(0)} / $${quest.goal.toFixed(0)}`
-                    : `${quest.progress} ${quest.progressUnit}`}
-                </Text>
-                <AnimatedProgressBar
-                  targetPercent={percent}
-                  color={colors[index % colors.length]}
-                  delay={100 + index * 150}
-                />
-              </View>
-            );
-          })}
+          {quests.slice(0, 3).map((quest, index) => (
+            <QuestCard key={quest.id} quest={quest} index={index} />
+          ))}
         </View>
 
         {/* Summary Cards */}
@@ -792,14 +814,66 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000',
     letterSpacing: 1,
+    flex: 1,
+  },
+  questInfoButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#fff9c4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
+  },
+  questInfoButtonText: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#000',
+  },
+  questInfoBox: {
+    marginTop: 10,
+    backgroundColor: '#fff9c4',
+    borderWidth: 2,
+    borderColor: '#000',
+    borderRadius: 12,
+    padding: 12,
+  },
+  questInfoText: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#000',
+    lineHeight: 18,
+  },
+  questInfoGoal: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9b59b6',
+    marginTop: 6,
+  },
+  questInfoXp: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#4caf50',
+    marginTop: 4,
+    letterSpacing: 1,
   },
   goalAmount: {
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: '700',
     color: '#ff6b6b',
-    position: 'absolute',
-    top: 16,
-    right: 16,
+    marginBottom: 6,
   },
 
   // Summary Cards
