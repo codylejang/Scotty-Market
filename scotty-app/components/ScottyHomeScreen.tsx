@@ -142,7 +142,7 @@ export default function ScottyHomeScreen({
   onCloseQuestsModal,
   onOpenQuestsModal,
 }: ScottyHomeScreenProps = {}) {
-  const { feedScotty } = useApp();
+  const { feedScotty, scottyState } = useApp();
   const [activeBudgetTab, setActiveBudgetTab] = useState<BudgetTab>('Daily');
   const budgetPagerRef = useRef<ScrollView>(null);
   const [budgetPagerWidth, setBudgetPagerWidth] = useState(0);
@@ -192,11 +192,12 @@ export default function ScottyHomeScreen({
   // Happiness bar animated width
   const happinessWidth = useSharedValue(0);
   React.useEffect(() => {
+    const target = Math.max(0, Math.min(100, scottyState.happiness));
     happinessWidth.value = withDelay(
       200,
-      withTiming(82, { duration: 800, easing: Easing.out(Easing.cubic) })
+      withTiming(target, { duration: 800, easing: Easing.out(Easing.cubic) })
     );
-  }, []);
+  }, [scottyState.happiness]);
   const happinessAnimStyle = useAnimatedStyle(() => ({
     width: `${happinessWidth.value}%`,
   }));
@@ -230,7 +231,7 @@ export default function ScottyHomeScreen({
       scottyAnimRef.current?.showLoved();
 
       // Call context feedScotty
-      feedScotty(type === 'food' ? 'meal' : 'treat');
+      feedScotty('treat');
     },
     [foodCounts, scottyLayout, feedScotty]
   );
@@ -310,7 +311,7 @@ export default function ScottyHomeScreen({
           <View style={styles.happinessContainer}>
             <View style={styles.meterHeader}>
               <Text style={styles.meterLabel}>SCOTTY HAPPINESS</Text>
-              <Text style={styles.meterValue}>82%</Text>
+              <Text style={styles.meterValue}>{scottyState.happiness}%</Text>
             </View>
             <View style={styles.meterContainer}>
               <AnimatedLinearGradient
@@ -398,9 +399,6 @@ export default function ScottyHomeScreen({
         <View style={styles.budgetSection}>
           <View style={styles.budgetHeader}>
             <Text style={styles.budgetTitle}>BUDGET DASHBOARD</Text>
-            <TouchableOpacity>
-              <Text style={styles.settingsIcon}>⚙️</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.tabContainer}>

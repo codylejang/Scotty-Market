@@ -81,6 +81,9 @@ const defaultHealthMetrics: HealthMetrics = {
   overallScore: 65,
 };
 
+const DAILY_HAPPINESS_DECAY = 20;
+const HAPPINESS_DECAY_INTERVAL_MS = 60_000;
+
 const AppContext = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -102,6 +105,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
       timestamp: new Date(),
     },
   ]);
+
+  useEffect(() => {
+    const decayPerMinute = DAILY_HAPPINESS_DECAY / (24 * 60);
+    const intervalId = setInterval(() => {
+      setScottyState((prev) => {
+        const nextHappiness = Math.max(0, prev.happiness - decayPerMinute);
+        const nextMood =
+          nextHappiness >= 80
+            ? 'happy'
+            : nextHappiness >= 60
+            ? 'content'
+            : nextHappiness >= 40
+            ? 'worried'
+            : 'sad';
+
+        if (nextHappiness === prev.happiness && nextMood === prev.mood) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          happiness: nextHappiness,
+          mood: nextMood,
+        };
+      });
+    }, HAPPINESS_DECAY_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Initialize on mount: show mock data immediately, then try backend in background
   useEffect(() => {
@@ -193,7 +225,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Local fallback
     const cost = type === 'meal' ? 5 : 2;
-    const happinessBoost = type === 'meal' ? 15 : 5;
+    const happinessBoost = 5;
 
     if (scottyState.foodCredits < cost) return;
 
