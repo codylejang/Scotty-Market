@@ -86,9 +86,6 @@ export default function BudgetBuilderModal({ visible, onClose }: BudgetBuilderMo
                 <Text style={styles.title}>Budget Builder</Text>
                 <Text style={styles.subtitle}>LET'S MAKE A PLAN!</Text>
               </View>
-              <View style={styles.avatarBadge}>
-                <Text style={styles.avatarEmoji}>🐕</Text>
-              </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
