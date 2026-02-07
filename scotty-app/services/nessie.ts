@@ -73,6 +73,12 @@ interface SeededNessieData {
   transactionsCreated: number;
 }
 
+/**
+ * Resolve Nessie API configuration from explicit options or environment fallbacks.
+ *
+ * @param options - Optional overrides for `baseUrl` and `apiKey`; when omitted, environment variables are consulted.
+ * @returns An object with `baseUrl` (string) and `apiKey` (string). Throws if `apiKey` cannot be resolved.
+ */
 function resolveNessieConfig(options: NessieOptions = {}) {
   const baseUrl =
     options.baseUrl ??
@@ -94,6 +100,15 @@ function resolveNessieConfig(options: NessieOptions = {}) {
   return { baseUrl, apiKey };
 }
 
+/**
+ * Fetches JSON from the Nessie API at the given path and returns the parsed response.
+ *
+ * @param baseUrl - Base URL for the Nessie API (e.g., https://api.nessieisreal.com/)
+ * @param path - API endpoint path (should begin with `/`)
+ * @param apiKey - Nessie API key used as the `key` query parameter
+ * @returns The parsed JSON response typed as `T`
+ * @throws Error if the HTTP response status is not OK; the error message includes the status, path, and response body
+ */
 async function nessieGet<T>(
   baseUrl: string,
   path: string,
@@ -110,6 +125,17 @@ async function nessieGet<T>(
   return response.json() as Promise<T>;
 }
 
+/**
+ * Perform an HTTP request to the Nessie API and return the parsed JSON response.
+ *
+ * @param baseUrl - Base URL of the Nessie API (e.g., with trailing slash)
+ * @param path - API path to call (should begin with a slash)
+ * @param apiKey - Nessie API key used as the `key` query parameter
+ * @param method - HTTP method to use for the request
+ * @param body - Optional request body to be JSON-serialized and sent
+ * @returns The parsed JSON response as type `T`. If the response status is 204 (No Content), returns `undefined`.
+ * @throws Error when the HTTP response is not ok; the error message includes the status, method, path, and response text.
+ */
 async function nessieRequest<T>(
   baseUrl: string,
   path: string,
@@ -136,6 +162,13 @@ async function nessieRequest<T>(
   return response.json() as Promise<T>;
 }
 
+/**
+ * Create a dummy customer in Nessie with a generated name and address.
+ *
+ * @param idx - Numeric index used to generate a unique customer name and street number
+ * @returns The created customer's `_id`
+ * @throws If the API response does not include a created customer ID
+ */
 async function createCustomer(baseUrl: string, apiKey: string, idx: number) {
   const response = await nessieRequest<NessieCreateResponse<NessieCustomer>>(
     baseUrl,
@@ -162,6 +195,16 @@ async function createCustomer(baseUrl: string, apiKey: string, idx: number) {
   return response.objectCreated._id;
 }
 
+/**
+ * Create a new account for the given customer and return its account ID.
+ *
+ * @param customerId - The ID of the customer to create the account for
+ * @param type - The account type (e.g., Checking, Savings, Credit Card)
+ * @param nickname - A user-facing nickname for the account
+ * @param balance - Initial balance for the account
+ * @returns The created account's `_id`
+ * @throws Error if the API response does not include the created account's `_id`
+ */
 async function createAccount(
   baseUrl: string,
   apiKey: string,
@@ -190,13 +233,21 @@ async function createAccount(
   return response.objectCreated._id;
 }
 
+/**
+ * Fetches merchant IDs from the Nessie API.
+ *
+ * @returns An array of merchant `_id` strings
+ */
 async function getMerchantIds(baseUrl: string, apiKey: string) {
   const merchants = await nessieGet<NessieMerchant[]>(baseUrl, '/merchants', apiKey);
   return merchants.map((merchant) => merchant._id);
 }
 
 /**
- * Deletes all existing accounts for the API key so a clean seed can be created.
+ * Deletes all accounts associated with the configured Nessie API key.
+ *
+ * @param options - Optional Nessie configuration to override the base URL or API key
+ * @returns The number of accounts that existed prior to deletion
  */
 export async function clearAllAccounts(options: NessieOptions = {}): Promise<number> {
   const { baseUrl, apiKey } = resolveNessieConfig(options);
@@ -212,8 +263,17 @@ export async function clearAllAccounts(options: NessieOptions = {}): Promise<num
 }
 
 /**
- * Clears existing accounts and creates realistic dummy data across checking, savings,
- * and credit-card accounts. Returns IDs and created transaction counts.
+ * Wipes all Nessie accounts and seeds sample customers, accounts, and transactions for development.
+ *
+ * Creates two customers, four accounts (primary checking, emergency savings, travel credit card,
+ * and a secondary checking), maps seed transactions from the bundled seed suite to those accounts,
+ * and posts purchases, deposits, withdrawals, and transfers as appropriate.
+ *
+ * @returns An object containing `customerIds` (created customer IDs), `accountIds` (created account IDs),
+ * and `transactionsCreated` (number of seed transactions successfully created)
+ * @throws Error if the Nessie API key is missing (from configuration resolution)
+ * @throws Error if no merchants are returned by Nessie (prevents creating purchase records)
+ * @throws Error if any seed transaction fails; the thrown message includes the seed index and transaction details
  */
 export async function resetAndSeedNessieDummyData(
   options: NessieOptions = {}
@@ -334,9 +394,14 @@ export async function resetAndSeedNessieDummyData(
 }
 
 /**
- * Fetches transaction history where amount is signed based on cash flow.
- * Negative = money out, positive = money in.
- */
+ * Retrieve transactions across all accounts within a date range, normalizing amounts to cash flow.
+ *
+ * Fetches transactions for every account, filters them to the inclusive [startDate, endDate] range, deduplicates by `_id`, and returns them sorted by date descending.
+ *
+ * @param startDate - Inclusive start of the date range to include
+ * @param endDate - Inclusive end of the date range to include
+ * @param options - Optional Nessie configuration (baseUrl, apiKey)
+ * @returns An array of transactions where `amount` is positive for money into the account and negative for money out of the account; each transaction contains `_id`, `type`, `amount`, `description`, and `date` fields. */
 export async function getTransactionHistory(
   startDate: Date,
   endDate: Date,
