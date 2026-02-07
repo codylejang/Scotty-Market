@@ -62,9 +62,6 @@ export default function HealthTab({ healthMetrics, onStartGoal, onCreateBudget, 
     <View style={styles.container}>
       {/* Health Speech Bubble */}
       <View style={styles.speechCard}>
-        <View style={styles.speechAvatar}>
-          <Text style={styles.speechAvatarText}>🐕</Text>
-        </View>
         <View style={styles.speechContent}>
           <Text style={styles.speechText}>
             I say your health is <Text style={styles.speechBold}>{healthPct}!</Text>

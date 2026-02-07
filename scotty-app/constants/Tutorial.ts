@@ -1,4 +1,4 @@
-export type TutorialScreen = 'home' | 'feed';
+export type TutorialScreen = 'home' | 'chat' | 'feed';
 export type FeedTabKey = 'transactions' | 'analytics' | 'health';
 
 export type TutorialStep = {
@@ -11,6 +11,8 @@ export type TutorialStep = {
   isFinal?: boolean;
   /** When true, dismiss modal and wait for user to feed Scotty before advancing. */
   waitForFeed?: boolean;
+  /** When true, dismiss modal and wait for Scotty to reply in chat before advancing. */
+  waitForChat?: boolean;
 };
 
 export const TUTORIAL_STEPS: TutorialStep[] = [
@@ -44,10 +46,32 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     primaryLabel: 'Next',
   },
   {
-    id: 'home-go-feed',
+    id: 'home-go-chat',
     screen: 'home',
-    title: 'Check your feed',
-    body: 'Let’s jump to your Feed to review transactions and insights.',
+    title: 'Talk to Scotty',
+    body: 'Scotty can answer questions about your spending. Let\'s try the chat.',
+    primaryLabel: 'Go to Chat',
+  },
+  {
+    id: 'chat-intro',
+    screen: 'chat',
+    title: 'Scotty Chat',
+    body: 'Tap one of the quick-action prompts above the text box to ask Scotty a question.',
+    primaryLabel: 'Try it!',
+  },
+  {
+    id: 'chat-try',
+    screen: 'chat',
+    title: 'Ask Scotty',
+    body: 'Tap a prompt chip to send a question.',
+    primaryLabel: '',
+    waitForChat: true,
+  },
+  {
+    id: 'chat-go-feed',
+    screen: 'chat',
+    title: 'Nice! Scotty replied.',
+    body: 'You can chat with Scotty anytime. Now let\'s check your Feed.',
     primaryLabel: 'Go to Feed',
   },
   {

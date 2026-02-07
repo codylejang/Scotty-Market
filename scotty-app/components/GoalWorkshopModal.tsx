@@ -87,9 +87,6 @@ export default function GoalWorkshopModal({ visible, onClose, onGoalCreated }: G
                 <Text style={styles.title}>Goal Workshop</Text>
                 <Text style={styles.subtitle}>LET'S MAKE A PLAN!</Text>
               </View>
-              <View style={styles.avatarBadge}>
-                <Text style={styles.avatarEmoji}>🐕</Text>
-              </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
