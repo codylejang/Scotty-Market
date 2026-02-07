@@ -1,5 +1,5 @@
 import { Transaction } from '../schemas';
-import seedSuite from '../data/nessie-seed-transactions.json';
+import seedSuite from '../data/seed-transactions.json';
 
 export interface NessieTransaction {
   _id: string;
