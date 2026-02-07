@@ -11,6 +11,7 @@ import {
   Quest,
   UserProfile,
   ChatAction,
+  BudgetProjectionsResponse,
 } from '../types';
 
 // Configure this to point to your backend
@@ -161,11 +162,12 @@ interface BackendTransaction {
 function mapTransaction(bt: BackendTransaction): Transaction {
   return {
     id: bt.id,
-    amount: Math.abs(bt.amount), // Frontend uses positive amounts
+    amount: Math.abs(bt.amount),
     category: mapCategory(bt.category_primary),
     merchant: bt.merchant_name || bt.name,
     date: new Date(bt.date),
     isSubscription: bt.category_primary?.toLowerCase().includes('subscription') || false,
+    isIncoming: bt.amount > 0,
   };
 }
 
@@ -419,6 +421,14 @@ export async function fetchBudgets(): Promise<BudgetItem[]> {
   }));
 }
 
+// ─── Budget Projections API ───
+
+export async function fetchBudgetProjections(): Promise<BudgetProjectionsResponse> {
+  return apiFetch<BudgetProjectionsResponse>(
+    `/v1/budget/projections?user_id=${DEFAULT_USER_ID}`
+  );
+}
+
 // ─── Account API ───
 
 export async function fetchAccounts(): Promise<{ accounts: AccountInfo[]; totalBalance: number }> {
@@ -464,7 +474,7 @@ export async function fetchTodaySpend(): Promise<number> {
       .filter(t => {
         const txDate = new Date(t.date);
         txDate.setHours(0, 0, 0, 0);
-        return txDate.getTime() === today.getTime();
+        return txDate.getTime() === today.getTime() && !t.isIncoming;
       })
       .reduce((sum, t) => sum + t.amount, 0);
     

@@ -135,27 +135,52 @@ export function upsertRecurringCandidates(candidates: RecurringCandidate[]): num
 }
 
 /**
+ * Advance a stale next_expected_date forward to the current or next occurrence.
+ * If the date is in the past, roll it forward by the cadence interval until it's today or in the future.
+ */
+function advanceToUpcoming(dateStr: string, cadence: string): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(dateStr + 'T00:00:00');
+
+  while (d < today) {
+    if (cadence === 'weekly') d.setDate(d.getDate() + 7);
+    else if (cadence === 'monthly') d.setMonth(d.getMonth() + 1);
+    else if (cadence === 'annual') d.setFullYear(d.getFullYear() + 1);
+    else break;
+  }
+
+  return d.toISOString().split('T')[0];
+}
+
+/**
  * Get upcoming subscription charges for a user.
  */
 export function getUpcomingSubscriptions(userId: string, daysAhead = 30): RecurringCandidate[] {
   const db = getDb();
   const futureDate = new Date();
   futureDate.setDate(futureDate.getDate() + daysAhead);
+  const futureDateStr = futureDate.toISOString().split('T')[0];
 
   const rows = db.prepare(`
     SELECT * FROM recurring_candidate
-    WHERE user_id = ? AND next_expected_date IS NOT NULL AND next_expected_date <= ?
+    WHERE user_id = ? AND next_expected_date IS NOT NULL
     ORDER BY next_expected_date ASC
-  `).all(userId, futureDate.toISOString().split('T')[0]) as any[];
+  `).all(userId) as any[];
 
-  return rows.map(r => ({
-    id: r.id,
-    user_id: r.user_id,
-    merchant_key: r.merchant_key,
-    typical_amount: r.typical_amount,
-    cadence: r.cadence,
-    next_expected_date: r.next_expected_date,
-    confidence: r.confidence,
-    source: JSON.parse(r.source || '{}'),
-  }));
+  return rows
+    .map(r => {
+      const advanced = advanceToUpcoming(r.next_expected_date, r.cadence);
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        merchant_key: r.merchant_key,
+        typical_amount: r.typical_amount,
+        cadence: r.cadence,
+        next_expected_date: advanced,
+        confidence: r.confidence,
+        source: JSON.parse(r.source || '{}'),
+      };
+    })
+    .filter(r => r.next_expected_date <= futureDateStr);
 }
