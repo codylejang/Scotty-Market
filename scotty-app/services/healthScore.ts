@@ -52,10 +52,7 @@ export function calculateHealthMetrics(params: HealthScoreParams): HealthMetrics
 }
 
 export function getMoodFromScore(score: number): MoodState {
-  if (score >= 80) return 'happy';
-  if (score >= 60) return 'content';
-  if (score >= 40) return 'worried';
-  return 'sad';
+  return score >= 60 ? 'happy' : 'sad';
 }
 
 export function getHappinessFromMetrics(metrics: HealthMetrics, lastFed: Date | null): number {
@@ -115,18 +112,6 @@ export function getStateInsight(metrics: HealthMetrics, mood: MoodState): string
       "I'm so happy! Your budget is looking great!",
       "*tail wagging intensifies* You're crushing it!",
       "Best. Human. Ever. Your savings are on point!",
-    ],
-    content: [
-      "Things are looking good! Just a few tweaks and we're golden!",
-      "Not bad at all! You're on the right track.",
-      "I'm feeling pretty good about your spending!",
-      "Steady progress! Keep watching those impulse buys.",
-    ],
-    worried: [
-      "Hmm, I'm a bit concerned... Let's review your spending?",
-      "We might want to cut back a little this week...",
-      "I believe in you! But maybe fewer DoorDash orders?",
-      "*concerned head tilt* Let's work on this together!",
     ],
     sad: [
       "I'm worried about you... Let's make a plan?",

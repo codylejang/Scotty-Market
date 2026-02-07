@@ -2,16 +2,19 @@ import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } f
 import { View, StyleSheet } from 'react-native';
 import IdleSvg from '../assets/images/idle.svg';
 import LovedSvg from '../assets/images/loved.svg';
+import SadSvg from '../assets/images/sad.svg';
+import { MoodState } from '../types';
 
 interface ScottyProps {
   size?: number;
+  mood?: MoodState;
 }
 
 export interface ScottyRef {
   showLoved: () => void;
 }
 
-export const Scotty = forwardRef<ScottyRef, ScottyProps>(({ size = 160 }, ref) => {
+export const Scotty = forwardRef<ScottyRef, ScottyProps>(({ size = 160, mood }, ref) => {
   const [isLoved, setIsLoved] = useState(false);
   const timeoutRef = useRef<any>(null);
 
@@ -39,7 +42,7 @@ export const Scotty = forwardRef<ScottyRef, ScottyProps>(({ size = 160 }, ref) =
     };
   }, []);
 
-  const SvgComponent = isLoved ? LovedSvg : IdleSvg;
+  const SvgComponent = isLoved ? LovedSvg : (mood === 'sad' ? SadSvg : IdleSvg);
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>

@@ -102,11 +102,6 @@ export function SpendingChart({
       <View style={styles.insightCard}>
         <View style={styles.insightContent}>
           <Text style={styles.insightText}>{insightMessage}</Text>
-          <View style={styles.insightActions}>
-            <View style={styles.insightButton}>
-              <Text style={styles.insightButtonText}>VIEW TIP</Text>
-            </View>
-          </View>
         </View>
       </View>
 
