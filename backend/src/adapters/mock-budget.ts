@@ -33,11 +33,13 @@ export function seedDefaultBudgets(userId: string): void {
   ];
 
   const insert = db.prepare(`
-    INSERT OR IGNORE INTO budget (id, user_id, category, amount, period)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO budget (id, user_id, category, amount, period, frequency, derived_daily_limit)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const b of defaults) {
-    insert.run(uuid(), userId, b.category, b.amount, b.period);
+    const frequency = 'Month'; // Capitalized for service layer
+    const derivedDaily = Math.round((b.amount / 30) * 100) / 100;
+    insert.run(uuid(), userId, b.category, b.amount, b.period, frequency, derivedDaily);
   }
 }
