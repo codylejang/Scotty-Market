@@ -34,20 +34,29 @@ export default function FeedScreen() {
   const [showBudgetModal, setShowBudgetModal] = useState(false);
 
   const insets = useSafeAreaInsets();
+  const headerOffset = Platform.OS === 'ios' ? -2 : 0;
+  const headerTextOffset = Platform.OS === 'ios' ? -3 : 0;
   const spending = getSpendingByCategory(transactions);
   const monthlyTotal = getTotalSpending(transactions, 30);
 
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={[styles.headerBar, { paddingTop: insets.top + 8 }]}>
+      <View
+        style={[
+          styles.headerBar,
+          {
+            paddingTop: insets.top + headerOffset,
+            height: insets.top + 56 + headerOffset,
+          },
+        ]}
+      >
         <View style={styles.headerLeft}>
           <View style={styles.headerAvatar}>
             <Text style={styles.headerAvatarEmoji}>🐕</Text>
           </View>
-          <View>
+          <View style={[styles.headerTextStack, { marginTop: headerTextOffset }]}>
             <Text style={styles.headerTitle}>FINANCES</Text>
-            <Text style={styles.headerSub}>TRACKING YOUR LOOT, WOOF!</Text>
           </View>
         </View>
         <TouchableOpacity 
@@ -132,9 +141,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 0,
+    paddingBottom: 8,
     backgroundColor: '#fff6f3',
   },
   headerLeft: {
@@ -142,13 +151,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  headerTextStack: {
+    justifyContent: 'center',
+  },
   headerAvatar: {
     width: 40,
     height: 40,
-    backgroundColor: '#e1bee7',
+    backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: '#000',
-    borderRadius: 12,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -161,9 +173,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: FONT,
     fontSize: 18,
-    fontWeight: '900',
+    fontWeight: 'bold',
     color: '#000',
     letterSpacing: 1,
+    lineHeight: 18,
   },
   headerSub: {
     fontFamily: FONT,
@@ -171,6 +184,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#999',
     letterSpacing: 1,
+    lineHeight: 9,
+    marginTop: -1,
   },
   headerSettingsBtn: {
     width: 40,
@@ -224,7 +239,7 @@ const styles = StyleSheet.create({
   tabText: {
     fontFamily: FONT,
     fontSize: 10,
-    fontWeight: '900',
+    fontWeight: '700',
     color: '#999',
     letterSpacing: 1,
   },
