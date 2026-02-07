@@ -8,6 +8,7 @@ import {
   Platform,
   LayoutChangeEvent,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
@@ -24,6 +25,8 @@ import { Scotty, ScottyRef } from './Scotty';
 import { useApp } from '../context/AppContext';
 import { fetchDailyQuests, refreshDailyQuests } from '../services/api';
 import { BudgetItem, Quest } from '../types';
+import TutorialModal from './TutorialModal';
+import { TUTORIAL_STEPS } from '../constants/Tutorial';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
@@ -71,7 +74,19 @@ export default function ScottyHomeScreen({
   onCloseQuestsModal,
   onOpenQuestsModal,
 }: ScottyHomeScreenProps = {}) {
-  const { feedScotty, budgets, totalBalance, dailySpend, scottyState, dailyInsight, quests: contextQuests } = useApp();
+  const router = useRouter();
+  const {
+    feedScotty,
+    budgets,
+    totalBalance,
+    dailySpend,
+    scottyState,
+    dailyInsight,
+    quests: contextQuests,
+    tutorial,
+    advanceTutorial,
+    skipTutorial,
+  } = useApp();
   const [activeBudgetTab, setActiveBudgetTab] = useState<BudgetTab>('Daily');
   const budgetPagerRef = useRef<ScrollView>(null);
   const [budgetPagerWidth, setBudgetPagerWidth] = useState(0);
@@ -88,7 +103,7 @@ export default function ScottyHomeScreen({
   }, [creditShare]);
 
   // Quests data: prefer context (backend) quests, fallback to mock
-  const [quests, setQuests] = useState<Quest[]>(generateDailyQuests());
+  const [quests, setQuests] = useState<Quest[]>([]);
   React.useEffect(() => {
     if (contextQuests.length > 0) {
       setQuests(contextQuests);
@@ -238,6 +253,19 @@ export default function ScottyHomeScreen({
 
     return byTab;
   }, [budgets]);
+
+  const currentStep = tutorial.active ? TUTORIAL_STEPS[tutorial.step] : null;
+  const showTutorial = tutorial.active && currentStep?.screen === 'home';
+
+  const handleTutorialPrimary = () => {
+    if (!currentStep) return;
+    if (currentStep.id === 'home-go-feed') {
+      advanceTutorial();
+      router.push('/(tabs)/feed');
+      return;
+    }
+    advanceTutorial();
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -480,6 +508,17 @@ export default function ScottyHomeScreen({
         onClose={onCloseQuestsModal || (() => {})}
         quests={quests}
         onRefreshQuests={handleRefreshQuests}
+      />
+
+      <TutorialModal
+        visible={!!showTutorial}
+        title={currentStep?.title || ''}
+        body={currentStep?.body || ''}
+        stepIndex={tutorial.step}
+        totalSteps={TUTORIAL_STEPS.length}
+        primaryLabel={currentStep?.primaryLabel || 'Next'}
+        onPrimary={handleTutorialPrimary}
+        onSkip={skipTutorial}
       />
     </View>
   );
