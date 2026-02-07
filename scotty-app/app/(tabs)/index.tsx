@@ -16,7 +16,7 @@ export default function HomeScreen() {
           onPress={() => setShowQuestsModal(true)}
           activeOpacity={0.7}
         >
-          <Text style={styles.badgeText}>Quests</Text>
+          <Text style={styles.badgeText}>Scotty's Quests</Text>
         </TouchableOpacity>
       ),
     });

@@ -36,16 +36,19 @@ export interface Achievement {
   aiGenerated: boolean;
 }
 
+export type QuestStatus = 'active' | 'completed' | 'failed';
+
 export interface Quest {
   id: string;
   title: string;
   subtitle: string; // e.g., "Meat Treat", "Sugar Free"
   emoji: string;
   xpReward: number;
-  progress: number; // current progress
-  goal: number; // total needed
+  progress: number; // current progress (e.g., amount spent so far)
+  goal: number; // cap / target (e.g., max spend allowed)
   progressUnit: string; // e.g., "days", "skips", "cups", "pack"
   bgColor: string;
+  status: QuestStatus; // validated by backend agent
   goalTarget?: string; // Which savings goal this quest contributes to
 }
 
