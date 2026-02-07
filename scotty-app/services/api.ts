@@ -328,18 +328,31 @@ export async function fetchActiveQuest(): Promise<Achievement | null> {
 }
 
 function buildQuestDescription(quest: any): string {
+  // Use agent-generated description if available
+  if (quest.description && quest.description.trim().length > 10) return quest.description;
+
   const params = quest.metric_params || {};
+  const cap = params.cap || params.target_amount || 0;
+  const cat = params.category || '';
+  const merchant = params.merchant || params.merchant_key || params.merchant_name || '';
+
   switch (quest.metric_type) {
     case 'CATEGORY_SPEND_CAP':
-      return `Keep ${params.category || 'spending'} under $${params.cap || 0} today`;
+      return cap > 0
+        ? `Keep your ${cat} spending under $${cap.toFixed(2)} today. Try cooking at home, skipping impulse buys, or finding a free alternative.`
+        : `Watch your ${cat} spending today. Aim to cut back by skipping one unnecessary purchase.`;
     case 'MERCHANT_SPEND_CAP':
-      return `Spend less than $${params.cap || 0} at ${params.merchant_key || 'merchant'}`;
+      return cap > 0
+        ? `Limit your spending at ${merchant || 'this merchant'} to $${cap.toFixed(2)}. Consider smaller orders or bringing your own instead.`
+        : `Cut back on spending at ${merchant || 'this merchant'} today. Every dollar saved counts!`;
     case 'NO_MERCHANT_CHARGE':
-      return `No charges from ${params.merchant_key || 'merchant'} this period`;
+      return `Avoid making any purchases at ${merchant || 'this merchant'} today. Find a free or cheaper alternative to break the habit.`;
     case 'TRANSFER_AMOUNT':
-      return `Transfer $${params.amount || 0} to savings`;
+      return cap > 0
+        ? `Transfer $${cap.toFixed(2)} to your savings. Set it up now so you don't forget!`
+        : `Make a savings transfer today. Even a small amount helps build the habit.`;
     default:
-      return quest.title;
+      return `Complete this quest to earn rewards and keep your finances on track!`;
   }
 }
 
@@ -481,6 +494,7 @@ export async function checkBackendHealth(): Promise<boolean> {
 interface BackendQuest {
   id: string;
   title: string;
+  description?: string;
   status: string;
   metric_type: string;
   metric_params: Record<string, any>;
@@ -507,7 +521,7 @@ function mapBackendQuest(q: BackendQuest, index: number): Quest {
   return {
     id: q.id,
     title: q.title,
-    subtitle: q.reward_food_type || 'Quest',
+    subtitle: buildQuestDescription(q),
     emoji: QUEST_EMOJI[q.metric_type] || '🎯',
     xpReward: q.happiness_delta * 5,
     progress: Math.round(q.confirmed_value * 100) / 100,
