@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -6,6 +6,7 @@ import {
   Text,
   TouchableOpacity,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,12 +33,30 @@ export default function FeedScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const pagerRef = useRef<ScrollView>(null);
 
   const insets = useSafeAreaInsets();
   const headerOffset = Platform.OS === 'ios' ? -2 : 0;
   const headerTextOffset = Platform.OS === 'ios' ? -3 : 0;
   const spending = getSpendingByCategory(transactions);
   const monthlyTotal = getTotalSpending(transactions, 30);
+  const pageWidth = useMemo(() => Dimensions.get('window').width, []);
+
+  const handleTabPress = (tab: TabType) => {
+    const index = TABS.findIndex((item) => item.key === tab);
+    if (index >= 0) {
+      pagerRef.current?.scrollTo({ x: index * pageWidth, animated: true });
+    }
+    setActiveTab(tab);
+  };
+
+  const handleSwipeEnd = (offsetX: number) => {
+    const index = Math.round(offsetX / pageWidth);
+    const nextTab = TABS[index]?.key;
+    if (nextTab && nextTab !== activeTab) {
+      setActiveTab(nextTab);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -59,13 +78,7 @@ export default function FeedScreen() {
             <Text style={styles.headerTitle}>FINANCES</Text>
           </View>
         </View>
-        <TouchableOpacity 
-          style={[styles.headerSettingsBtn, styles.headerSettingsBtnDisabled]}
-          disabled={true}
-          accessible={false}
-        >
-          <Text style={[styles.headerSettingsIcon, styles.headerSettingsIconDisabled]}>☰</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRightSpacer} />
       </View>
 
       {/* Tab Bar */}
@@ -74,7 +87,7 @@ export default function FeedScreen() {
           <TouchableOpacity
             key={tab.key}
             style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-            onPress={() => setActiveTab(tab.key)}
+            onPress={() => handleTabPress(tab.key)}
           >
             <Text
               style={[
@@ -89,30 +102,46 @@ export default function FeedScreen() {
       </View>
 
       <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
+        ref={pagerRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(event) => handleSwipeEnd(event.nativeEvent.contentOffset.x)}
+        style={styles.pager}
+        contentContainerStyle={styles.pagerContent}
       >
-        {activeTab === 'transactions' && (
+        <ScrollView
+          style={[styles.content, { width: pageWidth }]}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
           <TransactionList transactions={transactions} limit={30} />
-        )}
+        </ScrollView>
 
-        {activeTab === 'analytics' && (
+        <ScrollView
+          style={[styles.content, { width: pageWidth }]}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
           <SpendingChart
             spending={spending}
             budget={profile.monthlyBudget}
             transactions={transactions}
             balance={profile.currentBalance}
           />
-        )}
+        </ScrollView>
 
-        {activeTab === 'health' && (
+        <ScrollView
+          style={[styles.content, { width: pageWidth }]}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
           <HealthTab
             healthMetrics={healthMetrics}
             onStartGoal={() => setShowGoalModal(true)}
             onCreateBudget={() => setShowBudgetModal(true)}
           />
-        )}
+        </ScrollView>
       </ScrollView>
 
       {/* Modals */}
@@ -187,30 +216,9 @@ const styles = StyleSheet.create({
     lineHeight: 9,
     marginTop: -1,
   },
-  headerSettingsBtn: {
+  headerRightSpacer: {
     width: 40,
     height: 40,
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#000',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 2,
-  },
-  headerSettingsIcon: {
-    fontSize: 18,
-    color: '#000',
-  },
-  headerSettingsBtnDisabled: {
-    opacity: 0.4,
-  },
-  headerSettingsIconDisabled: {
-    color: '#999',
   },
 
   // Tab Bar
@@ -247,6 +255,12 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
+  pager: {
+    flex: 1,
+  },
+  pagerContent: {
+    flexGrow: 1,
+  },
   content: {
     flex: 1,
   },
