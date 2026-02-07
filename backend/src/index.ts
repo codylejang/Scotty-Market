@@ -8,25 +8,19 @@ import { AgentRunner, DedalusProvider, ClaudeLLMProvider, MockLLMProvider } from
 import { createRouter } from './api/routes';
 import { Orchestrator } from './orchestrator';
 
-// Load config from config.local.ts at backend root if it exists, otherwise use environment variables
-let CONFIG: { dedalus: { apiKey: string } };
+// Config: loaded from .env via --env-file flag in dev script, or from config.local.ts
+let DEDALUS_API_KEY = process.env.DEDALUS_API_KEY || '';
+let ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+
+// Also check config.local.ts if it exists (legacy support)
 try {
-  // Try to load config.local.ts from backend root (parent directory)
   const configModule = require('../config.local');
-  CONFIG = configModule.CONFIG;
+  DEDALUS_API_KEY = DEDALUS_API_KEY || configModule.CONFIG?.dedalus?.apiKey || '';
 } catch {
-  // Fallback to environment variables if config.local.ts doesn't exist
-  CONFIG = {
-    dedalus: {
-      apiKey: process.env.DEDALUS_API_KEY || '',
-    },
-  };
+  // No config.local.ts — using .env or environment variables
 }
 
 const PORT = parseInt(process.env.PORT || '3001');
-const DEDALUS_API_KEY = CONFIG.dedalus.apiKey || process.env.DEDALUS_API_KEY;
-// Fallback to Anthropic key if Dedalus key not provided
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 // Ensure data directory exists
 const dataDir = path.join(__dirname, '../data');

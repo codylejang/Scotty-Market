@@ -105,14 +105,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (isHealthy) {
       try {
         await loadFromBackend();
-        return; // Success - skip mock initialization
+        return;
       } catch (err) {
-        console.warn('Backend fetch failed, falling back to mock data:', err);
+        console.warn('[AppContext] Backend load failed, using mock data:', err);
         setBackendConnected(false);
       }
     }
 
-    // Fallback: use mock data
     initializeFromMock();
   }
 
@@ -234,14 +233,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (backendConnected) {
         try {
           response = await sendChatMessageAPI(message);
-        } catch (error: any) {
-          // Log the error for debugging
-          console.error('[Chat] API call failed, falling back to local:', error.message);
-          // Fallback to local
+        } catch {
           response = await generateChatResponse(message, transactions, chatMessages);
         }
       } else {
-        console.warn('[Chat] Backend not connected, using local response');
         response = await generateChatResponse(message, transactions, chatMessages);
       }
 
