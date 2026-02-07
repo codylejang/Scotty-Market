@@ -44,14 +44,14 @@ export function evaluateQuest(questId: string): EvaluationResult {
   const posted = getTransactions(quest.user_id, quest.window_start, quest.window_end, {
     includePending: false,
     category: params.category,
-    merchant: params.merchant_key,
+    merchant_key: params.merchant_key,
   });
 
   // Get pending transactions in window
   const allTxns = getTransactions(quest.user_id, quest.window_start, quest.window_end, {
     includePending: true,
     category: params.category,
-    merchant: params.merchant_key,
+    merchant_key: params.merchant_key,
   });
   const pendingTxns = allTxns.filter(t => t.pending);
 
@@ -192,21 +192,26 @@ export function evaluateQuest(questId: string): EvaluationResult {
 
   const previousStatus = quest.status;
 
-  // Update quest status
-  db.prepare(`UPDATE quest SET status = ?, updated_at = datetime('now') WHERE id = ?`)
-    .run(newStatus, questId);
+  // Atomic: update quest status + snapshot + reward in a single transaction
+  const commitEvaluation = db.transaction(() => {
+    // Update quest status
+    db.prepare(`UPDATE quest SET status = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(newStatus, questId);
 
-  // Create progress snapshot
-  db.prepare(`
-    INSERT INTO quest_progress_snapshot (id, quest_id, confirmed_value, pending_value, status, explanation)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(uuid(), questId, confirmedValue, pendingValue, newStatus, explanation);
+    // Create progress snapshot
+    db.prepare(`
+      INSERT INTO quest_progress_snapshot (id, quest_id, confirmed_value, pending_value, status, explanation)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(uuid(), questId, confirmedValue, pendingValue, newStatus, explanation);
 
-  // Grant reward on verified completion
-  if (newStatus === 'COMPLETED_VERIFIED' && previousStatus !== 'COMPLETED_VERIFIED') {
-    grantReward(quest.user_id, quest.reward_food_type, quest.happiness_delta);
-    rewardGranted = true;
-  }
+    // Grant reward on verified completion
+    if (newStatus === 'COMPLETED_VERIFIED' && previousStatus !== 'COMPLETED_VERIFIED') {
+      grantReward(quest.user_id, quest.reward_food_type, quest.happiness_delta);
+      rewardGranted = true;
+    }
+  });
+
+  commitEvaluation();
 
   return {
     questId,

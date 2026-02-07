@@ -11,6 +11,7 @@ import {
   BudgetItem,
   AccountInfo,
   TransactionCategory,
+  Quest,
 } from '../types';
 import {
   calculateHealthMetrics,
@@ -31,6 +32,10 @@ import {
   fetchBudgets,
   fetchAccounts,
   fetchTodaySpend,
+  fetchDailyQuests,
+  fetchSpendingTrend,
+  fetchUpcomingBills,
+  UpcomingBillsData,
 } from '../services/api';
 
 /** Race a promise against a timeout. Rejects if the promise doesn't resolve in time. */
@@ -60,6 +65,11 @@ interface AppState {
   accounts: AccountInfo[];
   totalBalance: number;
   dailySpend: number;
+
+  // Quests & trends
+  quests: Quest[];
+  spendingTrend: { months: string[]; totals: number[] };
+  upcomingBills: UpcomingBillsData | null;
 
   // Chat
   chatMessages: ChatMessage[];
@@ -142,6 +152,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
   const [dailySpend, setDailySpend] = useState(0);
+  const [quests, setQuests] = useState<Quest[]>([]);
+  const [spendingTrend, setSpendingTrend] = useState<{ months: string[]; totals: number[] }>({ months: [], totals: [] });
+  const [upcomingBills, setUpcomingBills] = useState<UpcomingBillsData | null>(null);
   const [backendConnected, setBackendConnected] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
@@ -242,6 +255,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDailySpend(todaySpend);
     } catch {
       // Non-critical data — keep defaults
+    }
+
+    // Fetch quests, spending trend, upcoming bills (non-critical)
+    try {
+      const [questsData, trendData, billsData] = await Promise.all([
+        fetchDailyQuests().catch(() => []),
+        fetchSpendingTrend().catch(() => ({ months: [], totals: [] })),
+        fetchUpcomingBills().catch(() => null),
+      ]);
+
+      if (questsData.length > 0) setQuests(questsData);
+      if (trendData.months.length > 0) setSpendingTrend(trendData);
+      if (billsData) setUpcomingBills(billsData);
+    } catch {
+      // Non-critical data
     }
 
     // Daily payload may trigger LLM on first run — fetch separately so it doesn't block above
@@ -393,6 +421,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         accounts,
         totalBalance,
         dailySpend,
+        quests,
+        spendingTrend,
+        upcomingBills,
         chatMessages,
         backendConnected,
         feedScotty,
