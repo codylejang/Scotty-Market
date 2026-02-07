@@ -1,9 +1,9 @@
 import { Transaction, Achievement, ChatMessage, DailyInsight } from '../types';
 import { getSpendingByCategory, getTotalSpending } from './mockData';
-import { sendChatMessageAPI, fetchDailyPayload, mapInsightToFrontend, checkBackendHealth } from './api';
 
 // AI Service for Scotty
-// Proxies through backend when available, falls back to local mock
+// Local AI service (mock or direct Claude API)
+// Backend proxying is handled by AppContext, not here
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
@@ -102,23 +102,14 @@ async function callClaudeAPI(systemPrompt: string, userMessage: string): Promise
   return data.content[0].text;
 }
 
-// Generate chat response from Scotty
-// Tries backend API first, then direct Claude API, then mock
+// Generate chat response from Scotty (local fallback)
+// Backend proxying is handled by AppContext.sendChatMessage — this function
+// is only called when the backend is unreachable or returns an error.
 export async function generateChatResponse(
   userMessage: string,
   transactions: Transaction[],
   chatHistory: ChatMessage[]
 ): Promise<string> {
-  // Try backend API first
-  try {
-    const backendUp = await checkBackendHealth();
-    if (backendUp) {
-      return await sendChatMessageAPI(userMessage);
-    }
-  } catch {
-    // Fall through to other methods
-  }
-
   const context = formatTransactionsForAI(transactions);
 
   if (config.useRealAI && config.apiKey) {
@@ -262,22 +253,10 @@ function generateMockAchievements(transactions: Transaction[]): Achievement[] {
   return achievements;
 }
 
-// Generate daily insight blurb
-// Tries backend API first, then direct Claude API, then mock
+// Generate daily insight blurb (local fallback)
+// Backend insight fetching is handled by AppContext — this function
+// is only called when the backend is unreachable.
 export async function generateDailyInsight(transactions: Transaction[]): Promise<DailyInsight> {
-  // Try backend API first
-  try {
-    const backendUp = await checkBackendHealth();
-    if (backendUp) {
-      const payload = await fetchDailyPayload();
-      if (payload.insights.length > 0) {
-        return mapInsightToFrontend(payload.insights[0]);
-      }
-    }
-  } catch {
-    // Fall through to other methods
-  }
-
   const context = formatTransactionsForAI(transactions);
 
   if (config.useRealAI && config.apiKey) {

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/
+!src/data/
+!src/data/*.json
+*.db
+.env
+config.local.ts
