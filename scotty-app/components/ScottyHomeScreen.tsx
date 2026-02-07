@@ -277,9 +277,6 @@ export default function ScottyHomeScreen({
     return byTab;
   }, [budgets]);
 
-  const currentStep = tutorial.active ? TUTORIAL_STEPS[tutorial.step] : null;
-  const showTutorial = tutorial.active && currentStep?.screen === 'home';
-
   const handleTutorialPrimary = () => {
     if (!currentStep) return;
     if (currentStep.id === 'home-go-feed') {
