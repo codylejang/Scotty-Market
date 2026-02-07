@@ -5,6 +5,7 @@ import { TOOLS, ToolContext, ToolDefinition } from './tools';
 import { DailyDigestOutput, ChatResponseOutput, TriggerType } from '../schemas';
 import { Adapters } from '../adapters';
 import { buildDualSummary } from '../services/financial-summary';
+import { searchTransactions, detectAnomalies } from '../services/retrieval';
 
 export type JobType = 'generate_daily_payload' | 'generate_chat_response' | 'propose_subscription_actions';
 
@@ -253,8 +254,13 @@ export class AgentRunner {
 
     let output: DailyDigestOutput;
 
-    // Try LLM first
-    const rawOutput = await this.llm.generate(DAILY_SYSTEM_PROMPT, contextPrompt, DailyDigestOutput, modelList);
+    // Try LLM first — catch provider errors so we fall through to deterministic fallback
+    let rawOutput: string | null = null;
+    try {
+      rawOutput = await this.llm.generate(DAILY_SYSTEM_PROMPT, contextPrompt, DailyDigestOutput, modelList);
+    } catch (err: any) {
+      console.warn(`[AgentRunner] LLM generate failed for daily payload, using fallback:`, err.message);
+    }
 
     if (rawOutput) {
       const parsed = this.parseAndValidate(rawOutput, DailyDigestOutput);
@@ -291,6 +297,7 @@ export class AgentRunner {
 
   /**
    * Generate a chat response grounded in app state.
+   * Uses retrieval tools when the user asks about specific transactions.
    * Uses Haiku (cheapest, fastest) for real-time chat with Sonnet fallback.
    */
   async generateChatResponse(userId: string, userMessage: string, models?: string[]): Promise<AgentResult<ChatResponseOutput>> {
@@ -301,6 +308,11 @@ export class AgentRunner {
     const activeQuest = await TOOLS.find(t => t.name === 'get_active_quest')!.execute(ctx, {});
     const scottyState = await TOOLS.find(t => t.name === 'get_scotty_state')!.execute(ctx, {});
 
+    // Retrieval-aware: detect if user is asking about specific transactions
+    const retrievalContext = this.buildRetrievalContext(userId, userMessage);
+    const toolsCalled: string[] = ['get_financial_summary', 'get_budgets', 'get_active_quest', 'get_scotty_state'];
+    if (retrievalContext) toolsCalled.push(...retrievalContext.tools);
+
     const contextPrompt = `User message: "${userMessage}"
 
 Context:
@@ -310,15 +322,21 @@ Context:
 - Budgets: ${JSON.stringify(budgets)}
 - Active quest: ${activeQuest ? activeQuest.title : 'none'}
 - Scotty happiness: ${scottyState.happiness}/100
+${retrievalContext ? `\nTransaction search results:\n${retrievalContext.text}` : ''}
 
-Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise and grounded in the data above.`;
+Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise and grounded in the data above.${retrievalContext ? ' Reference specific transaction details when answering.' : ''}`;
 
     // Use Haiku (cheapest, fastest) for chat with Sonnet fallback
     // Dedalus model format: anthropic/claude-{model}-{version}
     const modelList = models || ['anthropic/claude-3-haiku-20240307', 'anthropic/claude-3-5-sonnet-20241022'];
 
     let output: ChatResponseOutput;
-    const rawOutput = await this.llm.generate(CHAT_SYSTEM_PROMPT, contextPrompt, ChatResponseOutput, modelList);
+    let rawOutput: string | null = null;
+    try {
+      rawOutput = await this.llm.generate(CHAT_SYSTEM_PROMPT, contextPrompt, ChatResponseOutput, modelList);
+    } catch (err: any) {
+      console.warn(`[AgentRunner] LLM generate failed for chat, using fallback:`, err.message);
+    }
 
     if (rawOutput) {
       const parsed = this.parseAndValidate(rawOutput, ChatResponseOutput);
@@ -361,9 +379,72 @@ Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise 
 
     const logId = this.logDecision(userId, 'USER_CHAT', {
       user_message_length: userMessage.length,
+      tools_called: toolsCalled,
+      retrieval_used: !!retrievalContext,
     }, output);
 
     return { output, logId };
+  }
+
+  /**
+   * Detect if the user is asking about specific transactions and pre-fetch results.
+   * Returns retrieval context to inject into the LLM prompt, or null if no retrieval needed.
+   */
+  private buildRetrievalContext(userId: string, message: string): { text: string; tools: string[] } | null {
+    const msg = message.toLowerCase();
+    const tools: string[] = [];
+
+    // Detect amount references: "$83", "$12.50", "83 dollars"
+    const amountMatch = msg.match(/\$(\d+(?:\.\d{1,2})?)|(\d+(?:\.\d{1,2})?)\s*dollars?/);
+    // Detect merchant references
+    const merchantKeywords = msg.match(/(?:at|from|for)\s+([a-z][a-z\s]{2,20})/i);
+    // Detect temporal references
+    const hasDateRef = /(?:last|this|yesterday|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|week|month|january|february|march|april|may|june|july|august|september|october|november|december)/i.test(msg);
+    // Detect query intent
+    const hasQueryIntent = /(?:what|which|show|find|where|that|charge|transaction|purchase|bought|paid|spent at)/i.test(msg);
+
+    if (!hasQueryIntent && !amountMatch) return null;
+
+    const searchParams: any = { user_id: userId, limit: 10, sort_by: 'date' };
+
+    if (amountMatch) {
+      const amt = parseFloat(amountMatch[1] || amountMatch[2]);
+      // Search for transactions near this amount (negative amounts = spending)
+      searchParams.amount_min = -(amt + 1);
+      searchParams.amount_max = -(amt - 1);
+      searchParams.sort_by = 'relevance';
+    }
+
+    if (merchantKeywords) {
+      searchParams.query_text = merchantKeywords[1].trim();
+    }
+
+    // Expand date range if asking about older transactions
+    if (msg.includes('last month') || msg.includes('month')) {
+      const d60 = new Date(); d60.setDate(d60.getDate() - 60);
+      searchParams.date_start = d60.toISOString().split('T')[0];
+    } else if (msg.includes('last year') || msg.includes('year')) {
+      const d365 = new Date(); d365.setDate(d365.getDate() - 365);
+      searchParams.date_start = d365.toISOString().split('T')[0];
+    }
+
+    tools.push('search_transactions');
+    const result = searchTransactions(searchParams);
+
+    if (result.transactions.length === 0) return null;
+
+    // Format results for context
+    const lines = result.transactions.map(t =>
+      `- ${t.date} | $${Math.abs(t.amount).toFixed(2)} | ${t.merchant_name || t.name} | ${t.category_primary || 'Other'} (id: ${t.id})`
+    );
+
+    let text = `Found ${result.summary.count} matching transaction(s):\n${lines.join('\n')}`;
+
+    if (result.summary.count > 10) {
+      text += `\n(Showing top 10 of ${result.summary.count}. Ask the user to narrow down.)`;
+    }
+
+    return { text, tools };
   }
 
   private parseAndValidate<T>(raw: string, schema: z.ZodSchema<T>): T | null {
@@ -518,6 +599,13 @@ Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise 
       message: `Woof! I'm Scotty, your financial buddy. This week you've spent $${summary7d.total_spent.toFixed(2)}. Ask me about your spending, savings goals, or subscriptions!`,
       recommended_actions: [],
     };
+  }
+
+  /** Public wrapper for logging agent decisions from routes. */
+  logDecisionPublic(
+    userId: string, trigger: string, inputSummary: Record<string, any>, output: any
+  ): string {
+    return this.logDecision(userId, trigger, inputSummary, output);
   }
 
   private logDecision(

@@ -211,8 +211,18 @@ export class Orchestrator {
 
     if (insights.length === 0) {
       // Run on-demand digest (throttled by idempotency)
-      await this.runDailyDigest(userId);
-      return this.getAppOpenPayload(userId); // Re-fetch after running
+      try {
+        await this.runDailyDigest(userId);
+      } catch (err: any) {
+        console.warn(`[Orchestrator] On-demand digest failed for ${userId}:`, err.message);
+      }
+      // Re-check insights (non-recursive — if still empty, return empty)
+      const freshInsights = db.prepare(
+        `SELECT * FROM insight WHERE user_id = ? AND date = ? ORDER BY created_at`
+      ).all(userId, today) as any[];
+      if (freshInsights.length > 0) {
+        insights.push(...freshInsights);
+      }
     }
 
     const activeQuest = db.prepare(

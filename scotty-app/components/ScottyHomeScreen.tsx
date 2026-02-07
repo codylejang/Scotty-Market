@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { InsightBubble } from './InsightBubble';
+import { useApp } from '../context/AppContext';
 
 function PixelScotty({ size }: { size: number }) {
   return (
@@ -44,8 +46,27 @@ function PixelScotty({ size }: { size: number }) {
   );
 }
 
+const CATEGORY_EMOJI: Record<string, string> = {
+  'Food & Drink': '🍔',
+  'Groceries': '🛒',
+  'Transportation': '🚗',
+  'Entertainment': '🎭',
+  'Shopping': '🛍️',
+  'Health': '💊',
+  'Subscription': '📱',
+};
+
+const PROGRESS_COLORS = ['progressPurple', 'progressOrange', 'progressBlue'] as const;
+
+function formatCurrency(n: number): string {
+  return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export default function ScottyHomeScreen() {
+  const { dailyInsight, scottyState, budgets, totalBalance, dailySpend, achievements } = useApp();
   const [activeBudgetTab, setActiveBudgetTab] = useState<'Daily' | 'Weekly' | 'Monthly'>('Daily');
+
+  const happinessPercent = scottyState.happiness;
 
   return (
     <ScrollView
@@ -55,10 +76,14 @@ export default function ScottyHomeScreen() {
     >
       {/* Hero Section */}
       <View style={styles.heroSection}>
-        <View style={styles.speechBubble}>
-          <Text style={styles.speechText}>"Save some kibble for later!"</Text>
-          <View style={styles.speechTail} />
-        </View>
+        {dailyInsight ? (
+          <InsightBubble insight={dailyInsight} />
+        ) : (
+          <View style={styles.speechBubble}>
+            <Text style={styles.speechText}>"Save some kibble for later!"</Text>
+            <View style={styles.speechTail} />
+          </View>
+        )}
 
         <View style={styles.heroContent}>
           <View style={styles.dogContainer}>
@@ -93,75 +118,68 @@ export default function ScottyHomeScreen() {
         <View style={styles.happinessContainer}>
           <View style={styles.meterHeader}>
             <Text style={styles.meterLabel}>SCOTTY HAPPINESS</Text>
-            <Text style={styles.meterValue}>82%</Text>
+            <Text style={styles.meterValue}>{happinessPercent}%</Text>
           </View>
           <View style={styles.meterContainer}>
             <LinearGradient
               colors={['#ff6b6b', '#9b59b6']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={[styles.meterFill, { width: '82%' }]}
+              style={[styles.meterFill, { width: `${happinessPercent}%` }]}
             />
           </View>
         </View>
       </View>
 
-      {/* Savings Goals Section */}
-      <View style={styles.section}>
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <View style={styles.goalIcon}>
-              <Text style={styles.goalIconText}>🍖</Text>
-            </View>
-            <Text style={styles.goalTitle}>JUICY MEAT FUND</Text>
-          </View>
-          <Text style={styles.goalAmount}>$45 / $60</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressOrange, { width: '75%' }]} />
-          </View>
+      {/* Active Goals / Quests Section */}
+      {achievements.length > 0 && (
+        <View style={styles.section}>
+          {achievements.slice(0, 3).map((goal, idx) => {
+            const progress = goal.targetAmount && goal.targetAmount > 0
+              ? Math.min(100, Math.round(((goal.currentAmount || 0) / goal.targetAmount) * 100))
+              : goal.completed ? 100 : 0;
+            const colorStyle = [styles.progressOrange, styles.progressPurple, styles.progressBlue][idx % 3];
+            const iconBg = [undefined, styles.goalIconBlue, styles.goalIconGreen][idx % 3];
+            const icons = ['🍖', '☕', '🎯'];
+            return (
+              <View key={goal.id} style={styles.goalCard}>
+                <View style={styles.goalHeader}>
+                  <View style={[styles.goalIcon, iconBg]}>
+                    <Text style={styles.goalIconText}>{icons[idx % 3]}</Text>
+                  </View>
+                  <Text style={styles.goalTitle} numberOfLines={1}>
+                    {goal.title.toUpperCase()}
+                  </Text>
+                </View>
+                {goal.targetAmount ? (
+                  <Text style={styles.goalAmount}>
+                    {formatCurrency(goal.currentAmount || 0)} / {formatCurrency(goal.targetAmount)}
+                  </Text>
+                ) : null}
+                <View style={styles.progressBar}>
+                  <View style={[styles.progressFill, colorStyle, { width: `${progress}%` }]} />
+                </View>
+              </View>
+            );
+          })}
         </View>
-
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <View style={[styles.goalIcon, styles.goalIconBlue]}>
-              <Text style={styles.goalIconText}>☕</Text>
-            </View>
-            <Text style={styles.goalTitle}>BOBA RUN SAVINGS</Text>
-          </View>
-          <Text style={styles.goalAmount}>$12 / $30</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressPurple, { width: '40%' }]} />
-          </View>
-        </View>
-
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <View style={[styles.goalIcon, styles.goalIconGreen]}>
-              <Text style={styles.goalIconText}>🍦</Text>
-            </View>
-            <Text style={styles.goalTitle}>ICE CREAM PARTY</Text>
-          </View>
-          <Text style={styles.goalAmount}>$24 / $25</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressBlue, { width: '96%' }]} />
-          </View>
-        </View>
-      </View>
+      )}
 
       {/* Summary Cards */}
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>DAILY SPEND</Text>
-          <Text style={styles.summaryValueLarge}>$42.50</Text>
+          <Text style={styles.summaryValueLarge}>{formatCurrency(dailySpend)}</Text>
           <View style={styles.smallProgressBar}>
-            <View style={[styles.smallProgressFill, { width: '65%' }]} />
+            <View style={[styles.smallProgressFill, { width: `${Math.min(100, budgets.length > 0 ? (dailySpend / budgets.reduce((s, b) => s + b.derivedDailyLimit, 0)) * 100 : 50)}%` }]} />
           </View>
         </View>
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>BANK TOTAL</Text>
-          <Text style={[styles.summaryValueLarge, styles.summaryValuePurple]}>$2,410</Text>
-          <Text style={styles.todayIncome}>↗ +$120 today</Text>
+          <Text style={[styles.summaryValueLarge, styles.summaryValuePurple]}>
+            {totalBalance > 0 ? formatCurrency(totalBalance) : '$--'}
+          </Text>
         </View>
       </View>
 
@@ -194,47 +212,44 @@ export default function ScottyHomeScreen() {
           ))}
         </View>
 
-        <View style={styles.budgetCard}>
-          <View style={styles.budgetCategoryHeader}>
-            <View style={styles.budgetCategoryLeft}>
-              <Text style={styles.budgetEmoji}>🎭</Text>
-              <Text style={styles.budgetCategoryName}>Entertainment</Text>
-            </View>
-            <Text style={styles.budgetCategoryAmount}>$45.00 / $60.00</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressPurple, { width: '75%' }]} />
-          </View>
-          <Text style={styles.budgetProjection}>Projected End: 92%</Text>
-        </View>
+        {budgets.length > 0 ? (
+          budgets.map((budget, idx) => {
+            const limit = activeBudgetTab === 'Daily'
+              ? budget.derivedDailyLimit
+              : activeBudgetTab === 'Weekly'
+                ? budget.derivedDailyLimit * 7
+                : budget.limitAmount;
+            const pct = limit > 0 ? Math.min(100, Math.round((budget.spent / limit) * 100)) : 0;
+            const isOver = pct > 90;
+            const colorStyle = [styles.progressPurple, styles.progressOrange, styles.progressBlue][idx % 3];
 
-        <View style={styles.budgetCard}>
-          <View style={styles.budgetCategoryHeader}>
-            <View style={styles.budgetCategoryLeft}>
-              <Text style={styles.budgetEmoji}>🍔</Text>
-              <Text style={styles.budgetCategoryName}>Dining Out</Text>
-            </View>
-            <Text style={styles.budgetCategoryAmount}>$112.00 / $120.00</Text>
+            return (
+              <View key={budget.id} style={styles.budgetCard}>
+                <View style={styles.budgetCategoryHeader}>
+                  <View style={styles.budgetCategoryLeft}>
+                    <Text style={styles.budgetEmoji}>
+                      {CATEGORY_EMOJI[budget.category] || '📊'}
+                    </Text>
+                    <Text style={styles.budgetCategoryName}>{budget.category}</Text>
+                  </View>
+                  <Text style={styles.budgetCategoryAmount}>
+                    {formatCurrency(budget.spent)} / {formatCurrency(limit)}
+                  </Text>
+                </View>
+                <View style={styles.progressBar}>
+                  <View style={[styles.progressFill, colorStyle, { width: `${pct}%` }]} />
+                </View>
+                <Text style={[styles.budgetProjection, isOver && styles.budgetProjectionWarning]}>
+                  {pct}% used
+                </Text>
+              </View>
+            );
+          })
+        ) : (
+          <View style={styles.budgetCard}>
+            <Text style={styles.budgetCategoryName}>No budgets set up yet</Text>
           </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressOrange, { width: '93%' }]} />
-          </View>
-          <Text style={[styles.budgetProjection, styles.budgetProjectionWarning]}>Projected End: 115%</Text>
-        </View>
-
-        <View style={styles.budgetCard}>
-          <View style={styles.budgetCategoryHeader}>
-            <View style={styles.budgetCategoryLeft}>
-              <Text style={styles.budgetEmoji}>🛍️</Text>
-              <Text style={styles.budgetCategoryName}>Shopping</Text>
-            </View>
-            <Text style={styles.budgetCategoryAmount}>$20.00 / $150.00</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, styles.progressBlue, { width: '15%' }]} />
-          </View>
-          <Text style={styles.budgetProjection}>Projected End: 40%</Text>
-        </View>
+        )}
       </View>
     </ScrollView>
   );

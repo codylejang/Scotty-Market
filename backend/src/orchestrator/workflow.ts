@@ -95,14 +95,24 @@ export class WorkflowEngine {
 
     if (insertResult.changes === 0) {
       // Key already existed — another run claimed it. Return cached result if available.
-      const existing = db.prepare('SELECT result FROM idempotency_key WHERE key = ?').get(idempotencyKey) as any;
+      const existing = db.prepare('SELECT result, created_at FROM idempotency_key WHERE key = ?').get(idempotencyKey) as any;
       if (existing?.result) {
         console.log(`[WorkflowEngine] Idempotency hit for ${workflow.id}:${idempotencyKey}`);
         return JSON.parse(existing.result);
       }
-      // Key claimed but no result yet (concurrent run in progress) — treat as duplicate
-      console.log(`[WorkflowEngine] Idempotency claimed (in-progress) for ${workflow.id}:${idempotencyKey}`);
-      return {} as TOutput;
+      // Key claimed but no result yet — check if it's stale (older than 2 minutes)
+      const ageMs = Date.now() - new Date(existing?.created_at || 0).getTime();
+      if (ageMs > 120_000) {
+        // Stale in-progress key — previous run crashed. Delete and re-claim.
+        console.warn(`[WorkflowEngine] Stale idempotency key (${Math.round(ageMs / 1000)}s old), clearing: ${idempotencyKey}`);
+        db.prepare('DELETE FROM idempotency_key WHERE key = ? AND result IS NULL').run(idempotencyKey);
+        db.prepare('INSERT OR IGNORE INTO idempotency_key (key, result) VALUES (?, NULL)').run(idempotencyKey);
+        // Fall through to re-execute the workflow
+      } else {
+        // Recent concurrent run in progress — return empty to avoid double-execution
+        console.log(`[WorkflowEngine] Idempotency claimed (in-progress) for ${workflow.id}:${idempotencyKey}`);
+        return {} as TOutput;
+      }
     }
 
     const workflowId = uuid();
