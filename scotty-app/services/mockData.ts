@@ -1,162 +1,142 @@
+import seedSuite from '../data/nessie-seed-transactions.json';
 import { Transaction, TransactionCategory, Achievement, UserProfile } from '../types';
 
-// Realistic college student merchants by category
-const MERCHANTS: Record<TransactionCategory, string[]> = {
-  food_dining: ['Chipotle', 'Chick-fil-A', 'Starbucks', 'Dominos', 'DoorDash', 'Uber Eats', 'Taco Bell', 'McDonalds', 'Panda Express', 'Subway'],
-  groceries: ['Trader Joes', 'Walmart', 'Target', 'Aldi', 'Kroger', 'Costco', 'Whole Foods'],
-  transport: ['Uber', 'Lyft', 'Shell Gas', 'BP', 'Campus Parking', 'Bus Pass'],
-  entertainment: ['Netflix', 'Spotify', 'Steam', 'PlayStation', 'AMC Theaters', 'Dave & Busters', 'TopGolf'],
-  shopping: ['Amazon', 'Target', 'Shein', 'Urban Outfitters', 'Nike', 'Best Buy', 'Etsy'],
-  subscriptions: ['Netflix', 'Spotify', 'Apple Music', 'Disney+', 'Hulu', 'HBO Max', 'Crunchyroll', 'ChatGPT Plus', 'iCloud'],
-  utilities: ['Verizon', 'AT&T', 'Xfinity', 'Electric Co', 'Water Utility'],
-  education: ['Campus Bookstore', 'Chegg', 'Coursera', 'Quizlet Plus'],
-  health: ['CVS', 'Walgreens', 'Campus Health', 'GoodRx'],
-  other: ['Venmo', 'ATM Withdrawal', 'Cash App'],
-};
+type SeedTransactionKind = 'purchase' | 'deposit' | 'withdrawal' | 'transfer';
 
-// Typical spending ranges for college students
-const SPENDING_RANGES: Record<TransactionCategory, [number, number]> = {
-  food_dining: [8, 45],
-  groceries: [25, 120],
-  transport: [10, 50],
-  entertainment: [10, 60],
-  shopping: [15, 100],
-  subscriptions: [5, 20],
-  utilities: [30, 80],
-  education: [20, 150],
-  health: [10, 50],
-  other: [10, 100],
-};
+interface SeedTransaction {
+  kind: SeedTransactionKind;
+  account: string;
+  payeeAccount?: string;
+  date: string;
+  amount: number;
+  description: string;
+}
 
-// Category weights for realistic distribution
-const CATEGORY_WEIGHTS: Record<TransactionCategory, number> = {
-  food_dining: 0.35,
-  groceries: 0.12,
-  transport: 0.12,
-  entertainment: 0.10,
-  shopping: 0.12,
-  subscriptions: 0.08,
-  utilities: 0.04,
-  education: 0.03,
-  health: 0.02,
-  other: 0.02,
-};
+interface SeedSuite {
+  transactions: SeedTransaction[];
+}
+
+const parsedSeed = seedSuite as SeedSuite;
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 11);
 }
 
-function randomInRange(min: number, max: number): number {
-  return Math.round((Math.random() * (max - min) + min) * 100) / 100;
-}
-
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function weightedRandomCategory(): TransactionCategory {
-  const random = Math.random();
-  let cumulative = 0;
-
-  for (const [category, weight] of Object.entries(CATEGORY_WEIGHTS)) {
-    cumulative += weight;
-    if (random <= cumulative) {
-      return category as TransactionCategory;
-    }
+function mapDescriptionToCategory(description: string): TransactionCategory {
+  const text = description.toLowerCase();
+  if (text.includes('subscription') || text.includes('netflix') || text.includes('spotify') || text.includes('disney+') || text.includes('icloud') || text.includes('chatgpt')) {
+    return 'subscriptions';
   }
-
+  if (text.includes('grocer')) return 'groceries';
+  if (text.includes('dining') || text.includes('coffee') || text.includes('brunch') || text.includes('dinner') || text.includes('lunch') || text.includes('pizza')) {
+    return 'food_dining';
+  }
+  if (text.includes('travel') || text.includes('rideshare') || text.includes('train') || text.includes('flight') || text.includes('airport') || text.includes('bus') || text.includes('shuttle') || text.includes('rental')) {
+    return 'transport';
+  }
+  if (text.includes('fun') || text.includes('movie') || text.includes('concert') || text.includes('museum') || text.includes('theme park') || text.includes('escape room')) {
+    return 'entertainment';
+  }
+  if (text.includes('shopping') || text.includes('jacket') || text.includes('shoes') || text.includes('headphones') || text.includes('sale') || text.includes('gift') || text.includes('clothes')) {
+    return 'shopping';
+  }
+  if (text.includes('self-care') || text.includes('pharmacy') || text.includes('haircut') || text.includes('dental') || text.includes('wellness') || text.includes('salon') || text.includes('vitamins')) {
+    return 'health';
+  }
+  if (text.includes('utility') || text.includes('internet') || text.includes('rent')) {
+    return 'utilities';
+  }
   return 'other';
 }
 
-export function generateTransaction(daysAgo: number = 0): Transaction {
-  const category = weightedRandomCategory();
-  const [min, max] = SPENDING_RANGES[category];
-  const merchants = MERCHANTS[category];
+function toMerchant(description: string): string {
+  const [, detail] = description.split(' - ');
+  return (detail || description).trim();
+}
 
-  const date = new Date();
-  date.setDate(date.getDate() - daysAgo);
-  date.setHours(Math.floor(Math.random() * 14) + 8); // 8am - 10pm
-  date.setMinutes(Math.floor(Math.random() * 60));
+function isSpendingTransaction(seed: SeedTransaction): boolean {
+  return seed.kind === 'purchase' || seed.kind === 'withdrawal';
+}
 
+function toAppTransaction(seed: SeedTransaction, index: number): Transaction {
   return {
-    id: generateId(),
-    amount: randomInRange(min, max),
-    category,
-    merchant: pickRandom(merchants),
-    date,
-    isSubscription: category === 'subscriptions',
+    id: `seed_${index}_${seed.kind}_${seed.date}`,
+    amount: Math.abs(seed.amount),
+    category: mapDescriptionToCategory(seed.description),
+    merchant: toMerchant(seed.description),
+    date: new Date(seed.date),
+    isSubscription: mapDescriptionToCategory(seed.description) === 'subscriptions',
   };
 }
 
-export function generateTransactionHistory(days: number = 30, transactionsPerDay: number = 3): Transaction[] {
-  const transactions: Transaction[] = [];
+const SEEDED_SPENDING: Transaction[] = parsedSeed.transactions
+  .filter(isSpendingTransaction)
+  .map(toAppTransaction)
+  .sort((a, b) => b.date.getTime() - a.date.getTime());
 
-  for (let day = 0; day < days; day++) {
-    // Vary transactions per day (1-5, averaging around transactionsPerDay)
-    const count = Math.max(1, Math.floor(transactionsPerDay + (Math.random() - 0.5) * 4));
+export function generateTransaction(daysAgo: number = 0): Transaction {
+  const target = new Date();
+  target.setDate(target.getDate() - daysAgo);
+  const targetStr = target.toISOString().slice(0, 10);
+  const forDay = SEEDED_SPENDING.filter(
+    (tx) => tx.date.toISOString().slice(0, 10) === targetStr
+  );
+  const picked = forDay[0] || SEEDED_SPENDING[daysAgo % SEEDED_SPENDING.length];
+  return { ...picked, date: new Date(picked.date) };
+}
 
-    for (let i = 0; i < count; i++) {
-      transactions.push(generateTransaction(day));
-    }
-  }
+export function generateTransactionHistory(
+  days: number = 30,
+  _transactionsPerDay: number = 3
+): Transaction[] {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
 
-  // Sort by date descending (most recent first)
-  return transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+  return SEEDED_SPENDING
+    .filter((tx) => tx.date >= cutoff)
+    .map((tx) => ({ ...tx, date: new Date(tx.date) }))
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
 export function generateSubscriptions(): Transaction[] {
-  const subscriptionMerchants = MERCHANTS.subscriptions;
-  const numSubscriptions = Math.floor(Math.random() * 4) + 3; // 3-6 subscriptions
-  const selected = new Set<string>();
-  const subscriptions: Transaction[] = [];
-
-  while (selected.size < numSubscriptions) {
-    const merchant = pickRandom(subscriptionMerchants);
-    if (!selected.has(merchant)) {
-      selected.add(merchant);
-      subscriptions.push({
-        id: generateId(),
-        amount: randomInRange(5, 20),
-        category: 'subscriptions',
-        merchant,
-        date: new Date(),
-        isSubscription: true,
-      });
+  const latestByMerchant = new Map<string, Transaction>();
+  for (const tx of SEEDED_SPENDING.filter((t) => t.category === 'subscriptions')) {
+    const existing = latestByMerchant.get(tx.merchant);
+    if (!existing || tx.date > existing.date) {
+      latestByMerchant.set(tx.merchant, tx);
     }
   }
-
-  return subscriptions;
+  return Array.from(latestByMerchant.values()).map((tx) => ({
+    ...tx,
+    date: new Date(tx.date),
+    isSubscription: true,
+  }));
 }
 
 export function generateUserProfile(): UserProfile {
   return {
-    monthlyBudget: randomInRange(800, 1500),
-    monthlySavingsGoal: randomInRange(100, 300),
-    currentBalance: randomInRange(500, 3000),
+    monthlyBudget: 1500,
+    monthlySavingsGoal: 300,
+    currentBalance: 2400,
   };
 }
 
-// Sample AI-generated achievements based on spending patterns
 export function generateSampleAchievements(transactions: Transaction[]): Achievement[] {
   const categorySpending: Record<string, number> = {};
 
-  // Calculate spending by category for last 30 days
-  transactions.forEach(t => {
+  transactions.forEach((t) => {
     categorySpending[t.category] = (categorySpending[t.category] || 0) + t.amount;
   });
 
   const achievements: Achievement[] = [];
-
-  // Find top spending category and create achievement
-  const topCategory = Object.entries(categorySpending)
-    .sort(([, a], [, b]) => b - a)[0];
+  const topCategory = Object.entries(categorySpending).sort(([, a], [, b]) => b - a)[0];
 
   if (topCategory) {
     const [category, amount] = topCategory;
     achievements.push({
       id: generateId(),
       title: `Reduce ${category.replace('_', ' ')} spending`,
-      description: `You spent $${amount.toFixed(0)} on ${category.replace('_', ' ')} this month. Try cutting back by 20%!`,
+      description: `You spent $${amount.toFixed(0)} on ${category.replace('_', ' ')} recently. Try cutting back by 20%.`,
       targetAmount: Math.round(amount * 0.8),
       currentAmount: amount,
       completed: false,
@@ -165,39 +145,20 @@ export function generateSampleAchievements(transactions: Transaction[]): Achieve
     });
   }
 
-  // Count food delivery orders
-  const deliveryCount = transactions.filter(t =>
-    ['DoorDash', 'Uber Eats'].includes(t.merchant)
-  ).length;
-
-  if (deliveryCount > 5) {
-    achievements.push({
-      id: generateId(),
-      title: 'Cook More Challenge',
-      description: `You ordered delivery ${deliveryCount} times this month. Try cooking 3 meals this week instead!`,
-      completed: false,
-      aiGenerated: true,
-    });
-  }
-
-  // Coffee challenge
-  const coffeeSpend = transactions
-    .filter(t => t.merchant === 'Starbucks')
+  const subscriptionSpend = transactions
+    .filter((t) => t.category === 'subscriptions')
     .reduce((sum, t) => sum + t.amount, 0);
-
-  if (coffeeSpend > 30) {
+  if (subscriptionSpend > 0) {
     achievements.push({
       id: generateId(),
-      title: 'Brew Your Own',
-      description: `$${coffeeSpend.toFixed(0)} on Starbucks! Make coffee at home for a week and treat yourself on Friday.`,
-      targetAmount: 10,
-      currentAmount: coffeeSpend,
+      title: 'Subscription Audit',
+      description: `Recurring subscriptions total $${subscriptionSpend.toFixed(2)}. Consider canceling one you barely use.`,
       completed: false,
+      category: 'subscriptions',
       aiGenerated: true,
     });
   }
 
-  // General savings goal
   achievements.push({
     id: generateId(),
     title: 'Weekend Saver',
@@ -211,23 +172,21 @@ export function generateSampleAchievements(transactions: Transaction[]): Achieve
   return achievements;
 }
 
-// Get spending by category for charts
-export function getSpendingByCategory(transactions: Transaction[]): Record<TransactionCategory, number> {
+export function getSpendingByCategory(
+  transactions: Transaction[]
+): Record<TransactionCategory, number> {
   const spending: Partial<Record<TransactionCategory, number>> = {};
-
-  transactions.forEach(t => {
+  transactions.forEach((t) => {
     spending[t.category] = (spending[t.category] || 0) + t.amount;
   });
-
   return spending as Record<TransactionCategory, number>;
 }
 
-// Get total spending for a time period
 export function getTotalSpending(transactions: Transaction[], days: number = 30): number {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
 
   return transactions
-    .filter(t => t.date >= cutoff)
+    .filter((t) => t.date >= cutoff)
     .reduce((sum, t) => sum + t.amount, 0);
 }

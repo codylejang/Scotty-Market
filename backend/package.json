@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/db/seed.ts",
+    "test:nessie": "node --env-file=.env node_modules/.bin/tsx scripts/test-nessie.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

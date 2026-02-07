@@ -1,7 +1,7 @@
 import {
   getTransactionHistory,
   resetAndSeedNessieDummyData,
-} from '../services/nessie';
+} from '../src/services/nessie';
 
 function parseDateArg(value: string | undefined, fallback: Date): Date {
   if (!value) return fallback;

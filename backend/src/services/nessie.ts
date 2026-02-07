@@ -1,3 +1,4 @@
+import { Transaction } from '../schemas';
 import seedSuite from '../data/nessie-seed-transactions.json';
 
 export interface NessieTransaction {
@@ -51,7 +52,7 @@ interface NessieRawTransaction {
   payer_id?: string;
 }
 
-interface NessieOptions {
+export interface NessieOptions {
   baseUrl?: string;
   apiKey?: string;
 }
@@ -67,44 +68,30 @@ interface NessieCreateResponse<T> {
   message?: string;
 }
 
-interface SeededNessieData {
+export interface SeededNessieData {
   customerIds: string[];
   accountIds: string[];
   transactionsCreated: number;
 }
 
 function resolveNessieConfig(options: NessieOptions = {}) {
-  const baseUrl =
-    options.baseUrl ??
-    process.env.EXPO_PUBLIC_NESSIE_BASE_URL ??
-    process.env.NESSIE_BASE_URL ??
-    DEFAULT_BASE_URL;
-
-  const apiKey =
-    options.apiKey ??
-    process.env.EXPO_PUBLIC_NESSIE_API_KEY ??
-    process.env.NESSIE_API_KEY;
+  const baseUrl = options.baseUrl ?? process.env.NESSIE_BASE_URL ?? DEFAULT_BASE_URL;
+  const apiKey = options.apiKey ?? process.env.NESSIE_API_KEY;
 
   if (!apiKey) {
-    throw new Error(
-      'Missing Nessie API key. Set EXPO_PUBLIC_NESSIE_API_KEY (app) or NESSIE_API_KEY (CLI).'
-    );
+    throw new Error('Missing Nessie API key. Set NESSIE_API_KEY.');
   }
 
   return { baseUrl, apiKey };
 }
 
-async function nessieGet<T>(
-  baseUrl: string,
-  path: string,
-  apiKey: string
-): Promise<T> {
+async function nessieGet<T>(baseUrl: string, path: string, apiKey: string): Promise<T> {
   const url = `${baseUrl}${path}?key=${encodeURIComponent(apiKey)}`;
   const response = await fetch(url);
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Nessie API ${response.status} ${path}: ${body}`);
+    throw new Error(`Nessie API ${response.status} GET ${path}: ${body}`);
   }
 
   return response.json() as Promise<T>;
@@ -136,7 +123,7 @@ async function nessieRequest<T>(
   return response.json() as Promise<T>;
 }
 
-async function createCustomer(baseUrl: string, apiKey: string, idx: number) {
+async function createCustomer(baseUrl: string, apiKey: string, idx: number): Promise<string> {
   const response = await nessieRequest<NessieCreateResponse<NessieCustomer>>(
     baseUrl,
     '/customers',
@@ -169,7 +156,7 @@ async function createAccount(
   type: (typeof DEFAULT_ACCOUNT_TYPES)[number],
   nickname: string,
   balance: number
-) {
+): Promise<string> {
   const response = await nessieRequest<NessieCreateResponse<NessieAccount>>(
     baseUrl,
     `/customers/${customerId}/accounts`,
@@ -190,14 +177,189 @@ async function createAccount(
   return response.objectCreated._id;
 }
 
-async function getMerchantIds(baseUrl: string, apiKey: string) {
+async function getMerchantIds(baseUrl: string, apiKey: string): Promise<string[]> {
   const merchants = await nessieGet<NessieMerchant[]>(baseUrl, '/merchants', apiKey);
   return merchants.map((merchant) => merchant._id);
 }
 
-/**
- * Deletes all existing accounts for the API key so a clean seed can be created.
- */
+function splitDescription(description: string): {
+  prefix: string | null;
+  detail: string | null;
+} {
+  const parts = description.split(' - ');
+  if (parts.length <= 1) {
+    const trimmed = description.trim();
+    return {
+      prefix: null,
+      detail: trimmed.length > 0 ? trimmed : null,
+    };
+  }
+
+  const [prefixRaw, ...rest] = parts;
+  const prefix = prefixRaw.trim() || null;
+  const detail = rest.join(' - ').trim() || null;
+  return { prefix, detail };
+}
+
+export function inferNessieCategory(type: string, description: string): string {
+  const { prefix } = splitDescription(description);
+  if (prefix) {
+    const normalizedPrefix = prefix.toLowerCase();
+    if (normalizedPrefix.includes('income')) return 'Income';
+    if (normalizedPrefix.includes('grocer')) return 'Groceries';
+    if (normalizedPrefix.includes('dining')) return 'Food & Drink';
+    if (normalizedPrefix.includes('travel')) return 'Transportation';
+    if (normalizedPrefix.includes('fun')) return 'Entertainment';
+    if (normalizedPrefix.includes('shopping')) return 'Shopping';
+    if (normalizedPrefix.includes('self-care')) return 'Health';
+    if (normalizedPrefix.includes('misc')) return 'Other';
+    if (normalizedPrefix.includes('transfer')) return 'Transfer';
+    if (normalizedPrefix.includes('subscription')) return 'Subscription';
+  }
+
+  const text = `${type} ${description}`.toLowerCase();
+  if (
+    text.includes('subscription') ||
+    text.includes('netflix') ||
+    text.includes('spotify') ||
+    text.includes('disney+') ||
+    text.includes('icloud') ||
+    text.includes('chatgpt')
+  ) {
+    return 'Subscription';
+  }
+  if (text.includes('grocer')) return 'Groceries';
+  if (
+    text.includes('dining') ||
+    text.includes('restaurant') ||
+    text.includes('cafe') ||
+    text.includes('coffee')
+  ) {
+    return 'Food & Drink';
+  }
+  if (
+    text.includes('travel') ||
+    text.includes('airport') ||
+    text.includes('flight') ||
+    text.includes('train') ||
+    text.includes('bus') ||
+    text.includes('rideshare')
+  ) {
+    return 'Transportation';
+  }
+  if (
+    text.includes('fun') ||
+    text.includes('movie') ||
+    text.includes('concert') ||
+    text.includes('museum') ||
+    text.includes('theme park')
+  ) {
+    return 'Entertainment';
+  }
+  if (
+    text.includes('shopping') ||
+    text.includes('gift') ||
+    text.includes('clothes') ||
+    text.includes('sale')
+  ) {
+    return 'Shopping';
+  }
+  if (
+    text.includes('self-care') ||
+    text.includes('pharmacy') ||
+    text.includes('wellness') ||
+    text.includes('salon') ||
+    text.includes('dental')
+  ) {
+    return 'Health';
+  }
+  if (text.includes('transfer')) return 'Transfer';
+  if (type.toLowerCase().includes('deposit')) return 'Income';
+  return 'Other';
+}
+
+function inferSignedSeedAmount(seedTx: SeedTransaction): number {
+  const amount = Math.abs(seedTx.amount);
+  if (seedTx.kind === 'purchase' || seedTx.kind === 'withdrawal') {
+    return -amount;
+  }
+  if (seedTx.kind === 'deposit') {
+    return amount;
+  }
+  // Seed transfer records are written from payer account perspective.
+  return -amount;
+}
+
+function formatDate(value: string): string {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+export function buildSeedTransactionsForUser(userId: string): Transaction[] {
+  return parsedSeedSuite.transactions
+    .map((seedTx, index) => {
+      const description = seedTx.description || `${seedTx.kind} transaction`;
+      const { prefix, detail } = splitDescription(description);
+      const merchant = (detail || description || seedTx.kind).trim();
+      const providerTxnId = `${userId}:nessie-seed:${index}:${seedTx.date}:${seedTx.kind}`;
+
+      return {
+        id: `${userId}_nessie_seed_${index}`,
+        user_id: userId,
+        provider: 'nessie',
+        provider_txn_id: providerTxnId,
+        date: formatDate(seedTx.date),
+        amount: inferSignedSeedAmount(seedTx),
+        currency: 'USD',
+        name: merchant,
+        merchant_name: merchant,
+        category_primary: inferNessieCategory(seedTx.kind, description),
+        category_detailed: prefix,
+        pending: false,
+        pending_transaction_id: null,
+        metadata: {
+          source: 'seed_json',
+          kind: seedTx.kind,
+          account: seedTx.account,
+          payee_account: seedTx.payeeAccount ?? null,
+        },
+      } satisfies Transaction;
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export function mapNessieTransactionsToBackendTransactions(
+  userId: string,
+  transactions: NessieTransaction[]
+): Transaction[] {
+  return transactions.map((tx) => {
+    const description = tx.description || tx.type;
+    const { prefix, detail } = splitDescription(description);
+    const merchant = (detail || description || tx.type).trim();
+    const providerTxnId = `${userId}:nessie:${tx._id}`;
+
+    return {
+      id: `${userId}_nessie_${tx._id}`,
+      user_id: userId,
+      provider: 'nessie',
+      provider_txn_id: providerTxnId,
+      date: formatDate(tx.date),
+      amount: tx.amount,
+      currency: 'USD',
+      name: merchant,
+      merchant_name: merchant,
+      category_primary: inferNessieCategory(tx.type, description),
+      category_detailed: prefix,
+      pending: false,
+      pending_transaction_id: null,
+      metadata: {
+        source: 'nessie_api',
+        nessie_id: tx._id,
+        nessie_type: tx.type,
+      },
+    } satisfies Transaction;
+  });
+}
+
 export async function clearAllAccounts(options: NessieOptions = {}): Promise<number> {
   const { baseUrl, apiKey } = resolveNessieConfig(options);
   const accounts = await nessieGet<NessieAccount[]>(baseUrl, '/accounts', apiKey);
@@ -211,10 +373,6 @@ export async function clearAllAccounts(options: NessieOptions = {}): Promise<num
   return accounts.length;
 }
 
-/**
- * Clears existing accounts and creates realistic dummy data across checking, savings,
- * and credit-card accounts. Returns IDs and created transaction counts.
- */
 export async function resetAndSeedNessieDummyData(
   options: NessieOptions = {}
 ): Promise<SeededNessieData> {
@@ -333,19 +491,34 @@ export async function resetAndSeedNessieDummyData(
   };
 }
 
-/**
- * Fetches transaction history where amount is signed based on cash flow.
- * Negative = money out, positive = money in.
- */
+function signedAmountForNessieType(
+  typeLabel: (typeof DEFAULT_TYPES)[number],
+  tx: NessieRawTransaction,
+  accountId: string
+): number {
+  if (typeLabel === 'purchases' || typeLabel === 'withdrawals') {
+    return -Math.abs(tx.amount);
+  }
+  if (typeLabel === 'deposits') {
+    return Math.abs(tx.amount);
+  }
+  return tx.payer_id === accountId ? -Math.abs(tx.amount) : Math.abs(tx.amount);
+}
+
+function shouldReplaceExistingTransfer(existing: NessieTransaction, nextTx: NessieTransaction): boolean {
+  // If we receive the same transfer via payer and payee account listings,
+  // keep the outgoing (negative) representation for consistent cash-out semantics.
+  return existing.amount >= 0 && nextTx.amount < 0;
+}
+
 export async function getTransactionHistory(
   startDate: Date,
   endDate: Date,
   options: NessieOptions = {}
 ): Promise<NessieTransaction[]> {
   const { baseUrl, apiKey } = resolveNessieConfig(options);
-
   const accounts = await nessieGet<NessieAccount[]>(baseUrl, '/accounts', apiKey);
-  const allTransactions: NessieTransaction[] = [];
+  const byId = new Map<string, NessieTransaction>();
 
   for (const account of accounts) {
     const accountId = account._id;
@@ -367,32 +540,36 @@ export async function getTransactionHistory(
         if (!dateStr) return;
 
         const txDate = new Date(dateStr);
+        if (Number.isNaN(txDate.getTime())) return;
         if (txDate < startDate || txDate > endDate) return;
 
-        let signedAmount = tx.amount;
-
-        if (typeLabel === 'purchases' || typeLabel === 'withdrawals') {
-          signedAmount = -Math.abs(tx.amount);
-        } else if (typeLabel === 'deposits') {
-          signedAmount = Math.abs(tx.amount);
-        } else if (typeLabel === 'transfers') {
-          signedAmount =
-            tx.payer_id === accountId ? -Math.abs(tx.amount) : Math.abs(tx.amount);
-        }
-
-        allTransactions.push({
+        const mapped: NessieTransaction = {
           _id: tx._id,
           type: tx.type || typeLabel,
-          amount: signedAmount,
+          amount: signedAmountForNessieType(typeLabel, tx, accountId),
           description: tx.description || '',
-          date: dateStr,
-        });
+          date: formatDate(dateStr),
+        };
+
+        const existing = byId.get(mapped._id);
+        if (!existing) {
+          byId.set(mapped._id, mapped);
+          return;
+        }
+
+        if (typeLabel === 'transfers' && shouldReplaceExistingTransfer(existing, mapped)) {
+          byId.set(mapped._id, mapped);
+          return;
+        }
+
+        if (!existing.description && mapped.description) {
+          byId.set(mapped._id, mapped);
+        }
       });
     });
   }
 
-  const uniqueMap = new Map(allTransactions.map((t) => [t._id, t]));
-  return Array.from(uniqueMap.values()).sort(
+  return Array.from(byId.values()).sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 }

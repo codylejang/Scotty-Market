@@ -4,8 +4,8 @@ import { AgentRunner } from '../agents/runner';
 import { Adapters } from '../adapters';
 import { evaluateQuest } from '../services/quest-evaluation';
 import { getUpcomingSubscriptions } from '../services/subscription-analysis';
-import { getTransactions } from '../services/ingestion';
 import { computeHealthMetrics } from '../services/health-metrics';
+import { resetAndSeedNessieDummyData } from '../services/nessie';
 import { getDb } from '../db/database';
 import { TransactionSchema } from '../schemas';
 import { z } from 'zod';
@@ -27,7 +27,10 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
       const start = req.query.start as string || d30.toISOString().split('T')[0];
       const includePending = req.query.include_pending === 'true';
 
-      const txns = getTransactions(userId, start, end, { includePending });
+      // Refresh from Nessie when due (adapter throttles and only ingests new rows).
+      await adapters.bank.syncTransactions(userId);
+
+      const txns = await adapters.bank.listTransactions(userId, start, end, includePending);
       res.json(txns);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -251,6 +254,32 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
         return res.json(result);
       }
       const result = await orchestrator.runDailyDigestAll();
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── POST /v1/admin/nessie/sync ───
+  router.post('/v1/admin/nessie/sync', async (req: Request, res: Response) => {
+    try {
+      const userId = (req.body?.user_id as string) || 'user_1';
+      const force = req.body?.force === true;
+      const result = await adapters.bank.syncTransactions(userId, force ? 'force' : undefined);
+      res.json({
+        userId,
+        synced: result.transactions.length,
+        cursor: result.cursor,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── POST /v1/admin/nessie/seed ───
+  router.post('/v1/admin/nessie/seed', async (_req: Request, res: Response) => {
+    try {
+      const result = await resetAndSeedNessieDummyData();
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
