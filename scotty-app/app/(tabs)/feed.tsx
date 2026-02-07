@@ -66,13 +66,16 @@ export default function FeedScreen() {
 
   useEffect(() => {
     if (!showTutorial || !currentStep?.tab) return;
-    const index = TABS.findIndex((item) => item.key === currentStep.tab);
+    const targetTab = currentStep.tab;
+    const index = TABS.findIndex((item) => item.key === targetTab);
     if (index < 0) return;
-    if (activeTab !== currentStep.tab) {
-      setActiveTab(currentStep.tab);
-    }
-    pagerRef.current?.scrollTo({ x: index * pageWidth, animated: true });
-  }, [showTutorial, currentStep?.tab, activeTab, pageWidth]);
+    setActiveTab(targetTab);
+    // Use a short delay so the state settles before scrolling
+    const timer = setTimeout(() => {
+      pagerRef.current?.scrollTo({ x: index * pageWidth, animated: true });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [showTutorial, currentStep?.tab, pageWidth]);
 
   const handleTutorialPrimary = () => {
     if (!currentStep) return;
@@ -112,9 +115,6 @@ export default function FeedScreen() {
         ]}
       >
         <View style={styles.headerLeft}>
-          <View style={styles.headerAvatar}>
-            <Text style={styles.headerAvatarEmoji}>🐕</Text>
-          </View>
           <View style={[styles.headerTextStack, { marginTop: headerTextOffset }]}>
             <Text style={styles.headerTitle}>FINANCES</Text>
           </View>
@@ -218,13 +218,13 @@ export default function FeedScreen() {
             <View style={styles.tutorialActions}>
               <TouchableOpacity
                 style={styles.tutorialActionButton}
-                onPress={() => setShowGoalModal(true)}
+                onPress={() => { completeTutorial(); setShowGoalModal(true); }}
               >
                 <Text style={styles.tutorialActionText}>Start a goal</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.tutorialActionButton}
-                onPress={() => setShowBudgetModal(true)}
+                onPress={() => { completeTutorial(); setShowBudgetModal(true); }}
               >
                 <Text style={styles.tutorialActionText}>Create a budget</Text>
               </TouchableOpacity>

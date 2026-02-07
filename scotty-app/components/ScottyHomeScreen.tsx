@@ -57,6 +57,16 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value);
 
+const formatCompact = (value: number): string => {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+  if (abs >= 1_000_000_000_000) return `${sign}$${(abs / 1_000_000_000_000).toFixed(1)}t`;
+  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(1)}b`;
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}m`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}k`;
+  return `${sign}$${abs.toFixed(2)}`;
+};
+
 const getDailyLimit = (budget: BudgetItem) => {
   if (budget.derivedDailyLimit > 0) return budget.derivedDailyLimit;
   if (budget.frequency === 'Day') return budget.limitAmount;
@@ -289,9 +299,9 @@ export default function ScottyHomeScreen({
 
   const handleTutorialPrimary = () => {
     if (!currentStep) return;
-    if (currentStep.id === 'home-go-feed') {
+    if (currentStep.id === 'home-go-chat') {
       advanceTutorial();
-      router.push('/(tabs)/feed');
+      router.push('/(tabs)/chat');
       return;
     }
     advanceTutorial();
@@ -365,7 +375,7 @@ export default function ScottyHomeScreen({
           <View style={styles.happinessContainer}>
             <View style={styles.meterHeader}>
               <Text style={styles.meterLabel}>SCOTTY HAPPINESS</Text>
-              <Text style={styles.meterValue}>{scottyState.happiness}%</Text>
+              <Text style={styles.meterValue}>{Math.round(scottyState.happiness)}%</Text>
             </View>
             <View style={styles.meterContainer}>
               <AnimatedLinearGradient
@@ -428,7 +438,7 @@ export default function ScottyHomeScreen({
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>BANK TOTAL</Text>
             <Text style={[styles.summaryValueLarge, styles.summaryValuePurple]}>
-              {totalBalance > 0 ? formatCurrency(totalBalance) : '$--'}
+              {totalBalance > 0 ? formatCompact(totalBalance) : '$--'}
             </Text>
             <Text style={styles.todayIncome}>
               {totalDailyLimit > 0

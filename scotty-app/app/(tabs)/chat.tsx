@@ -14,8 +14,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useApp } from '@/context/AppContext';
+import { useRouter } from 'expo-router';
 import Scotty from '@/components/Scotty';
 import PawLoader from '@/components/PawLoader';
+import TutorialModal from '@/components/TutorialModal';
+import { TUTORIAL_STEPS } from '@/constants/Tutorial';
 import { ChatMessage, ChatAction, ChatActionIcon, ChatActionCategory } from '@/types';
 import { Colors, Shadows } from '@/constants/Theme';
 
@@ -72,11 +75,52 @@ export default function ChatScreen() {
     chatActions,
     sendChatMessage,
     loadChatActions,
+    tutorial,
+    advanceTutorial,
+    skipTutorial,
   } = useApp();
+  const router = useRouter();
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
+
+  // Tutorial state
+  const currentStep = tutorial.active ? TUTORIAL_STEPS[tutorial.step] : null;
+  const isWaitingForChat = currentStep?.waitForChat === true;
+  const isChatGoFeed = currentStep?.id === 'chat-go-feed';
+  const showTutorial = tutorial.active && currentStep?.screen === 'chat' && !isWaitingForChat && !isChatGoFeed;
+
+  // After Scotty replies, show a continue button after a delay
+  const [chatReplyReady, setChatReplyReady] = useState(false);
+
+  // Track message count to detect when Scotty replies during waitForChat
+  const prevMsgCount = useRef(chatMessages.length);
+  useEffect(() => {
+    if (isWaitingForChat && chatMessages.length > prevMsgCount.current) {
+      const last = chatMessages[chatMessages.length - 1];
+      if (last?.role === 'scotty') {
+        // Scotty replied — show continue button after delay, THEN advance step
+        const timer = setTimeout(() => {
+          setChatReplyReady(true);
+          advanceTutorial();
+        }, 2000);
+        return () => clearTimeout(timer);
+      }
+    }
+    prevMsgCount.current = chatMessages.length;
+  }, [chatMessages.length, isWaitingForChat, advanceTutorial]);
+
+  const handleContinueToFeed = () => {
+    setChatReplyReady(false);
+    advanceTutorial();
+    router.push('/(tabs)/feed');
+  };
+
+  const handleTutorialPrimary = () => {
+    if (!currentStep) return;
+    advanceTutorial();
+  };
 
   // Load contextual actions on mount
   useEffect(() => {
@@ -268,6 +312,38 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Tutorial Modal */}
+      <TutorialModal
+        visible={!!showTutorial}
+        title={currentStep?.title || ''}
+        body={currentStep?.body || ''}
+        stepIndex={tutorial.step}
+        totalSteps={TUTORIAL_STEPS.length}
+        primaryLabel={currentStep?.primaryLabel || 'Next'}
+        onPrimary={handleTutorialPrimary}
+        onSkip={skipTutorial}
+      />
+
+      {/* Floating hint during waitForChat */}
+      {isWaitingForChat && (
+        <View style={styles.chatHintBanner}>
+          <Text style={styles.chatHintText}>💬  Tap a prompt chip to ask Scotty!</Text>
+        </View>
+      )}
+
+      {/* Non-blocking continue button after Scotty replies */}
+      {isChatGoFeed && chatReplyReady && (
+        <View style={styles.continueBar} pointerEvents="box-none">
+          <TouchableOpacity
+            style={styles.continueButton}
+            onPress={handleContinueToFeed}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.continueText}>Continue to Feed →</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -503,5 +579,48 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: 'bold',
     fontSize: 20,
+  },
+  chatHintBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 50,
+    backgroundColor: Colors.violet,
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.ink,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  chatHintText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.white,
+    letterSpacing: 0.5,
+  },
+  continueBar: {
+    position: 'absolute',
+    bottom: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  continueButton: {
+    backgroundColor: Colors.coral,
+    borderWidth: 2,
+    borderColor: Colors.ink,
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    ...Shadows.sketch,
+  },
+  continueText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.white,
   },
 });

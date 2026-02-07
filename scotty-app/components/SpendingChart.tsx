@@ -100,9 +100,6 @@ export function SpendingChart({
     <View style={styles.container}>
       {/* Insight Bubble */}
       <View style={styles.insightCard}>
-        <View style={styles.insightAvatar}>
-          <Text style={styles.insightAvatarText}>🐕</Text>
-        </View>
         <View style={styles.insightContent}>
           <Text style={styles.insightText}>{insightMessage}</Text>
           <View style={styles.insightActions}>
