@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx create-expo-app@latest scotty-app --template tabs)"
+      "Bash(npx create-expo-app@latest scotty-app --template tabs)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx tsx:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs:*)",
+      "Bash(ls:*)",
+      "Bash(npx expo:*)",
+      "Bash(npx:*)"
     ]
   }
 }
