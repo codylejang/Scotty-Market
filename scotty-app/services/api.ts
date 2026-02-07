@@ -7,6 +7,7 @@ import {
   DailyInsight,
   FoodType,
 } from '../types';
+import { getTransactionHistory, resetAndSeedNessieDummyData } from './nessie';
 
 // Configure this to point to your backend
 const API_BASE_URL = __DEV__
@@ -100,10 +101,30 @@ function mapTransaction(bt: BackendTransaction): Transaction {
 // ─── Public API Functions ───
 
 export async function fetchTransactions(days: number = 30): Promise<Transaction[]> {
+  if (process.env.EXPO_PUBLIC_USE_NESSIE === 'true') {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - days);
+
+    const nessieTransactions = await getTransactionHistory(startDate, endDate);
+    return nessieTransactions.map((tx) => ({
+      id: tx._id,
+      amount: Math.abs(tx.amount), // Frontend currently expects absolute amounts
+      category: mapCategory(tx.type),
+      merchant: tx.description || tx.type,
+      date: new Date(tx.date),
+      isSubscription: tx.type.toLowerCase().includes('subscription'),
+    }));
+  }
+
   const data = await apiFetch<BackendTransaction[]>(
     `/v1/transactions?user_id=${DEFAULT_USER_ID}&days=${days}&include_pending=true`
   );
   return data.map(mapTransaction);
+}
+
+export async function seedNessieSandboxData() {
+  return resetAndSeedNessieDummyData();
 }
 
 export interface DailyPayload {
