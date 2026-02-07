@@ -12,6 +12,7 @@ import {
   AccountInfo,
   TransactionCategory,
   Quest,
+  ChatAction,
 } from '../types';
 import {
   calculateHealthMetrics,
@@ -36,6 +37,7 @@ import {
   fetchDailyQuests,
   fetchSpendingTrend,
   fetchUpcomingBills,
+  fetchChatSuggestedActions,
   UpcomingBillsData,
 } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -76,6 +78,7 @@ interface AppState {
 
   // Chat
   chatMessages: ChatMessage[];
+  chatActions: ChatAction[];
 
   // Connection status
   backendConnected: boolean;
@@ -97,6 +100,7 @@ interface AppState {
   dismissAchievement: (id: string) => void;
   sendChatMessage: (message: string) => Promise<void>;
   refreshInsight: () => Promise<void>;
+  loadChatActions: () => Promise<void>;
   setOnboardingAgreed: (value: boolean) => void;
   advanceTutorial: () => void;
   skipTutorial: () => void;
@@ -184,6 +188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingAgreed, setOnboardingAgreed] = useState(false);
   const [tutorialActive, setTutorialActive] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
+  const [chatActions, setChatActions] = useState<ChatAction[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -457,15 +462,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     try {
       let response: string;
+      let newActions: ChatAction[] = [];
 
       if (backendConnected) {
         try {
-          response = await sendChatMessageAPI(message);
+          const result = await sendChatMessageAPI(message);
+          response = result.response;
+          newActions = result.actions;
         } catch {
           response = await generateChatResponse(message, transactions, chatMessages);
         }
       } else {
         response = await generateChatResponse(message, transactions, chatMessages);
+      }
+
+      if (newActions.length > 0) {
+        setChatActions(newActions);
       }
 
       const scottyMessage: ChatMessage = {
@@ -504,6 +516,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const insight = await generateDailyInsight(transactions);
     setDailyInsight(insight);
+  };
+
+  const loadChatActions = async () => {
+    if (backendConnected) {
+      try {
+        const actions = await fetchChatSuggestedActions();
+        if (actions.length > 0) setChatActions(actions);
+      } catch {
+        // Keep existing actions
+      }
+    }
   };
 
   const completeTutorial = () => {
@@ -549,6 +572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         spendingTrend,
         upcomingBills,
         chatMessages,
+        chatActions,
         backendConnected,
         onboarding: { agreedToPact: onboardingAgreed },
         tutorial: { active: tutorialActive, step: tutorialStep },
@@ -557,6 +581,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dismissAchievement,
         sendChatMessage,
         refreshInsight,
+        loadChatActions,
         setOnboardingAgreed,
         advanceTutorial,
         skipTutorial,

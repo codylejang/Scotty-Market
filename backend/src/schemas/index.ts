@@ -107,9 +107,27 @@ export const DailyDigestOutput = z.object({
 });
 export type DailyDigestOutput = z.infer<typeof DailyDigestOutput>;
 
+// ─── Chat Suggested Actions ───
+export const ChatSuggestedActionIcon = z.enum(['wallet', 'savings', 'trophy', 'receipt', 'alert', 'chart']);
+export type ChatSuggestedActionIcon = z.infer<typeof ChatSuggestedActionIcon>;
+
+export const ChatSuggestedActionCategory = z.enum(['finances', 'budget', 'goal', 'spending']);
+export type ChatSuggestedActionCategory = z.infer<typeof ChatSuggestedActionCategory>;
+
+export const ChatSuggestedAction = z.object({
+  id: z.string(),
+  label: z.string().max(30),
+  icon: ChatSuggestedActionIcon,
+  category: ChatSuggestedActionCategory,
+  prompt: z.string().max(200),
+  description: z.string().max(80).optional(),
+});
+export type ChatSuggestedAction = z.infer<typeof ChatSuggestedAction>;
+
 export const ChatResponseOutput = z.object({
   message: z.string().max(1000),
   recommended_actions: z.array(AgentActionOutput).max(2),
+  suggested_actions: z.array(ChatSuggestedAction).max(4).optional(),
 });
 export type ChatResponseOutput = z.infer<typeof ChatResponseOutput>;
 

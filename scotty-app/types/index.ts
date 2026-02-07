@@ -68,11 +68,24 @@ export interface UserProfile {
   currentBalance: number;
 }
 
+export type ChatActionIcon = 'wallet' | 'savings' | 'trophy' | 'receipt' | 'alert' | 'chart';
+export type ChatActionCategory = 'finances' | 'budget' | 'goal' | 'spending';
+
+export interface ChatAction {
+  id: string;
+  label: string;
+  icon: ChatActionIcon;
+  category: ChatActionCategory;
+  prompt: string;
+  description?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'scotty';
   content: string;
   timestamp: Date;
+  actions?: ChatAction[];
 }
 
 export interface DailyInsight {
