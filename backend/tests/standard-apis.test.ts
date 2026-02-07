@@ -24,8 +24,9 @@ describe('computeDerivedDailyLimit', () => {
     expect(computeDerivedDailyLimit(50, 'Day')).toBe(50);
   });
 
-  it('Week frequency divides by 7', () => {
-    expect(computeDerivedDailyLimit(70, 'Week')).toBe(10);
+  it('Year frequency divides by days in year', () => {
+    const year2025 = new Date(2025, 5, 1); // non-leap year
+    expect(computeDerivedDailyLimit(365, 'Year', year2025)).toBe(1);
   });
 
   it('Month frequency uses actual days in month', () => {
@@ -41,8 +42,9 @@ describe('computeDerivedDailyLimit', () => {
   });
 
   it('handles rounding to 2 decimal places', () => {
-    const result = computeDerivedDailyLimit(100, 'Week');
-    expect(result).toBe(14.29); // 100/7 = 14.285...
+    const feb2025 = new Date(2025, 1, 15); // 28 days
+    const result = computeDerivedDailyLimit(100, 'Month', feb2025);
+    expect(result).toBe(3.57); // 100/28 = 3.571...
   });
 
   it('handles zero-ish amounts', () => {
@@ -73,14 +75,14 @@ describe('validateBudgetInput', () => {
 
   it('rejects invalid frequency', () => {
     const result = validateBudgetInput({
-      user_id: 'u1', category: 'Food & Drink', limit_amount: 100, frequency: 'Year',
+      user_id: 'u1', category: 'Food & Drink', limit_amount: 100, frequency: 'Quarter',
     });
     expect(result.error).toContain('frequency');
   });
 
   it('accepts valid input', () => {
     const result = validateBudgetInput({
-      user_id: 'u1', category: 'Food & Drink', limit_amount: 100, frequency: 'Week',
+      user_id: 'u1', category: 'Food & Drink', limit_amount: 100, frequency: 'Year',
     });
     expect(result.error).toBeUndefined();
   });
@@ -102,23 +104,23 @@ describe('Budget CRUD', () => {
 
   it('lists budgets for a user', () => {
     createBudget(TEST_USER_ID, 'Food & Drink', 300, 'Month');
-    createBudget(TEST_USER_ID, 'Shopping', 200, 'Week');
+    createBudget(TEST_USER_ID, 'Shopping', 200, 'Year');
 
     const budgets = listBudgets(TEST_USER_ID);
     expect(budgets.length).toBe(2);
     expect(budgets[0].category).toBe('Food & Drink'); // sorted alphabetically
     expect(budgets[1].category).toBe('Shopping');
-    expect(budgets[1].derived_daily_limit).toBeCloseTo(200 / 7, 1);
+    expect(budgets[1].derived_daily_limit).toBeCloseTo(200 / 365, 1);
   });
 
   it('updates a budget and recomputes derived daily limit', () => {
     const budget = createBudget(TEST_USER_ID, 'Entertainment', 100, 'Month');
-    const updated = updateBudget(budget.id, { limit_amount: 210, frequency: 'Week' });
+    const updated = updateBudget(budget.id, { limit_amount: 210, frequency: 'Year' });
 
     expect(updated).not.toBeNull();
     expect(updated!.limit_amount).toBe(210);
-    expect(updated!.frequency).toBe('Week');
-    expect(updated!.derived_daily_limit).toBe(30); // 210/7
+    expect(updated!.frequency).toBe('Year');
+    expect(updated!.derived_daily_limit).toBeCloseTo(210 / 365, 1);
   });
 
   it('returns null when updating nonexistent budget', () => {

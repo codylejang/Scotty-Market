@@ -9,7 +9,7 @@ export class MockBudgetProvider implements BudgetProvider {
     return rows.map(r => ({
       category: r.category,
       amount: r.amount,
-      period: r.period as 'monthly' | 'weekly',
+      period: r.period as 'daily' | 'monthly' | 'yearly' | 'weekly',
     }));
   }
 

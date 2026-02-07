@@ -50,6 +50,8 @@ export interface Quest {
   bgColor: string;
   status: QuestStatus; // validated by backend agent
   goalTarget?: string; // Which savings goal this quest contributes to
+  createdBy?: string; // 'agent' | 'goal_workshop'
+  goalId?: string; // Reference to savings goal if created from goal workshop
 }
 
 export interface ScottyState {
@@ -113,9 +115,12 @@ export interface FoodItem {
 export interface BudgetItem {
   id: string;
   category: string;
-  frequency: 'Day' | 'Week' | 'Month';
+  frequency: 'Day' | 'Month' | 'Year';
   limitAmount: number;
   derivedDailyLimit: number;
+  adaptiveEnabled: boolean;
+  adaptiveMaxAdjustPct: number;
+  lastAutoAdjustedAt?: string | null;
   spent: number; // computed client-side from transactions
 }
 

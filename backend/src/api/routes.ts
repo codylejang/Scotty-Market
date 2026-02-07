@@ -7,9 +7,18 @@ import { getUpcomingSubscriptions, detectRecurringCandidates, upsertRecurringCan
 import { computeHealthMetrics } from '../services/health-metrics';
 import { searchTransactions, getTransactionById, listTransactionStats, detectAnomalies, DetectAnomaliesInput } from '../services/retrieval';
 import { buildDualSummary } from '../services/financial-summary';
+import { generateGoalQuests } from '../services/goal-quests';
 import { resetAndSeedNessieDummyData, getTransactionHistory, inferNessieCategory } from '../services/nessie';
 import { runFullSeed } from '../db/seed';
-import { listBudgets, createBudget, updateBudget, validateBudgetInput, BudgetFrequency, computeProjections } from '../services/budget';
+import {
+  listBudgets,
+  createBudget,
+  updateBudget,
+  validateBudgetInput,
+  BudgetFrequency,
+  computeProjections,
+  applyAdaptiveAdjustments,
+} from '../services/budget';
 import { getDb } from '../db/database';
 import { TransactionSchema } from '../schemas';
 import { z } from 'zod';
@@ -320,6 +329,8 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
         req.body.category,
         req.body.limit_amount,
         req.body.frequency || 'Month',
+        req.body.adaptive_enabled ?? true,
+        req.body.adaptive_max_adjust_pct ?? 10,
       );
       res.status(201).json(budget);
     } catch (err: any) {
@@ -333,10 +344,20 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
   // ─── PUT /v1/budget/:id ───
   router.put('/v1/budget/:id', async (req: Request, res: Response) => {
     try {
-      const updates: { limit_amount?: number; frequency?: BudgetFrequency; category?: string } = {};
+      const updates: {
+        limit_amount?: number;
+        frequency?: BudgetFrequency;
+        category?: string;
+        adaptive_enabled?: boolean;
+        adaptive_max_adjust_pct?: number;
+      } = {};
       if (req.body.limit_amount !== undefined) updates.limit_amount = req.body.limit_amount;
       if (req.body.frequency) updates.frequency = req.body.frequency;
       if (req.body.category) updates.category = req.body.category;
+      if (req.body.adaptive_enabled !== undefined) updates.adaptive_enabled = req.body.adaptive_enabled;
+      if (req.body.adaptive_max_adjust_pct !== undefined) {
+        updates.adaptive_max_adjust_pct = req.body.adaptive_max_adjust_pct;
+      }
 
       const budget = updateBudget(req.params.id as string, updates);
       if (!budget) return res.status(404).json({ error: 'Budget not found' });
@@ -352,6 +373,18 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
       const userId = req.query.user_id as string;
       if (!userId) return res.status(400).json({ error: 'user_id required' });
       const result = computeProjections(userId);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── POST /v1/budget/auto-adjust ───
+  router.post('/v1/budget/auto-adjust', async (req: Request, res: Response) => {
+    try {
+      const userId = req.body.user_id as string;
+      if (!userId) return res.status(400).json({ error: 'user_id required' });
+      const result = applyAdaptiveAdjustments(userId);
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -726,7 +759,10 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
         return {
           id: q.id,
           title: q.title,
+          description: q.description || '',
           status: q.status,
+          created_by: q.created_by,
+          goal_id: q.goal_id || null,
           metric_type: q.metric_type,
           metric_params: params,
           reward_food_type: q.reward_food_type,
@@ -772,7 +808,10 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
         return {
           id: q.id,
           title: q.title,
+          description: q.description || '',
           status: q.status,
+          created_by: q.created_by,
+          goal_id: q.goal_id || null,
           metric_type: q.metric_type,
           metric_params: params,
           reward_food_type: q.reward_food_type,
@@ -1238,6 +1277,15 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
 
       const goal = db.prepare('SELECT * FROM goal WHERE id = ?').get(id);
       res.status(201).json(goal);
+
+      setImmediate(async () => {
+        try {
+          await generateGoalQuests(user_id, goal as any);
+          await runner.generateBudgetSuggestions(user_id, { apply: true });
+        } catch (err) {
+          console.warn('[Goals] Background processing failed:', err);
+        }
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

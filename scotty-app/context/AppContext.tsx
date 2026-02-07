@@ -62,6 +62,54 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+const BUDGET_CATEGORY_MAP: Record<string, TransactionCategory[]> = {
+  'Food & Drink': ['food_dining', 'groceries'],
+  'Groceries': ['groceries'],
+  'Transportation': ['transport'],
+  'Entertainment': ['entertainment'],
+  'Shopping': ['shopping'],
+  'Health': ['health'],
+  'Subscription': ['subscriptions'],
+};
+
+function getPeriodDays(frequency: BudgetItem['frequency'], referenceDate: Date = new Date()): number {
+  if (frequency === 'Day') return 1;
+  if (frequency === 'Year') {
+    const year = referenceDate.getFullYear();
+    const start = new Date(year, 0, 1);
+    const end = new Date(year + 1, 0, 1);
+    return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth();
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function applyBudgetSpend(budgetData: BudgetItem[], txns: Transaction[]) {
+  const today = new Date();
+  const budgetsWithSpend = budgetData.map((budget) => {
+    const matchCategories = BUDGET_CATEGORY_MAP[budget.category] || ['other'];
+    const catTxns = txns.filter((t) => matchCategories.includes(t.category));
+    const periodDays = getPeriodDays(budget.frequency, today);
+    const periodStart = new Date(today);
+    periodStart.setDate(periodStart.getDate() - periodDays + 1);
+    const periodTxns = catTxns.filter((t) => t.date >= periodStart);
+    const spent = periodTxns.reduce((sum, t) => sum + t.amount, 0);
+    return { ...budget, spent: Math.round(spent * 100) / 100 };
+  });
+
+  const computedDailySpend = budgetsWithSpend.reduce((sum, budget) => {
+    const periodDays = getPeriodDays(budget.frequency, today);
+    return sum + budget.spent / periodDays;
+  }, 0);
+
+  return {
+    budgetsWithSpend,
+    computedDailySpend: Math.round(computedDailySpend * 100) / 100,
+  };
+}
+
 interface AppState {
   // User data
   profile: UserProfile;
@@ -86,6 +134,7 @@ interface AppState {
   // Quests, goals & trends
   quests: Quest[];
   goals: GoalData[];
+  pendingGoalNotification: string | null;
   spendingTrend: { months: string[]; totals: number[] };
   upcomingBills: UpcomingBillsData | null;
 
@@ -115,6 +164,9 @@ interface AppState {
   refreshInsight: () => Promise<void>;
   cycleInsight: () => void;
   refreshGoals: () => Promise<void>;
+  refreshQuests: () => Promise<void>;
+  refreshBudgets: () => Promise<void>;
+  clearGoalNotification: () => void;
   loadChatActions: () => Promise<void>;
   setOnboardingAgreed: (value: boolean) => void;
   advanceTutorial: () => void;
@@ -201,6 +253,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [budgetProjections, setBudgetProjections] = useState<BudgetProjectionsResponse | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
   const [goals, setGoals] = useState<GoalData[]>([]);
+  const [pendingGoalNotification, setPendingGoalNotification] = useState<string | null>(null);
   const [spendingTrend, setSpendingTrend] = useState<{ months: string[]; totals: number[] }>({ months: [], totals: [] });
   const [upcomingBills, setUpcomingBills] = useState<UpcomingBillsData | null>(null);
   const [backendConnected, setBackendConnected] = useState(false);
@@ -343,30 +396,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
 
       if (budgetData.length > 0) {
-        // Compute spent per budget category from transactions
-        // Group Groceries into Food & Drink so grocery spend counts toward that budget
-        const catMap: Record<string, string[]> = {
-          'Food & Drink': ['food_dining', 'groceries'],
-          'Groceries': ['groceries'],
-          'Transportation': ['transport'],
-          'Entertainment': ['entertainment'],
-          'Shopping': ['shopping'],
-          'Health': ['health'],
-          'Subscription': ['subscriptions'],
-        };
-        const today = new Date();
-        const budgetsWithSpend = budgetData.map(b => {
-          const matchCategories = catMap[b.category] || ['other'];
-          const catTxns = txns.filter(t => matchCategories.includes(t.category));
-          // Sum spending in current period
-          const periodDays = b.frequency === 'Day' ? 1 : b.frequency === 'Week' ? 7 : 30;
-          const periodStart = new Date(today);
-          periodStart.setDate(periodStart.getDate() - periodDays);
-          const periodTxns = catTxns.filter(t => t.date >= periodStart);
-          const spent = periodTxns.reduce((sum, t) => sum + t.amount, 0);
-          return { ...b, spent: Math.round(spent * 100) / 100 };
-        });
+        const { budgetsWithSpend, computedDailySpend } = applyBudgetSpend(budgetData, txns);
         setBudgets(budgetsWithSpend);
+        setDailySpend(computedDailySpend);
+      } else {
+        setDailySpend(todaySpend);
       }
 
       // Always use today's actual spend from transactions (not averages)
@@ -550,23 +584,71 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const clearGoalNotification = () => {
+    setPendingGoalNotification(null);
+  };
+
+  // Refresh quests from backend
+  const refreshQuests = async () => {
+    if (!backendConnected) return;
+
+    try {
+      const questsData = await fetchDailyQuests();
+      setQuests(questsData);
+    } catch {
+      // Keep existing quests
+    }
+  };
+
   // Refresh goals
   const refreshGoals = async () => {
-    if (backendConnected) {
-      try {
-        const goalsData = await fetchGoals();
-        setGoals(goalsData.map(g => ({
-          id: g.id,
-          name: g.name,
-          targetAmount: g.target_amount,
-          savedSoFar: g.saved_so_far,
-          deadline: g.deadline,
-          budgetPercent: g.budget_percent,
-          status: g.status,
-        })));
-      } catch {
-        // Keep existing goals
+    if (!backendConnected) return;
+
+    try {
+      const goalsData = await fetchGoals();
+      setGoals(goalsData.map(g => ({
+        id: g.id,
+        name: g.name,
+        targetAmount: g.target_amount,
+        savedSoFar: g.saved_so_far,
+        deadline: g.deadline,
+        budgetPercent: g.budget_percent,
+        status: g.status,
+      })));
+    } catch {
+      // Keep existing goals
+    }
+
+    setPendingGoalNotification('Scotty is building quests for your goal...');
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await Promise.all([refreshQuests(), refreshBudgets()]);
+    setPendingGoalNotification('New quests added!');
+    setTimeout(() => setPendingGoalNotification(null), 3000);
+  };
+
+  // Refresh budgets and projections after edits
+  const refreshBudgets = async () => {
+    if (!backendConnected) return;
+
+    try {
+      const [budgetData, projectionsData, todaySpend] = await Promise.all([
+        fetchBudgets().catch(() => []),
+        fetchBudgetProjections().catch(() => null),
+        fetchTodaySpend().catch(() => 0),
+      ]);
+
+      if (budgetData.length > 0) {
+        const { budgetsWithSpend, computedDailySpend } = applyBudgetSpend(budgetData, transactions);
+        setBudgets(budgetsWithSpend);
+        setDailySpend(computedDailySpend);
+      } else {
+        setBudgets([]);
+        setDailySpend(todaySpend);
       }
+
+      if (projectionsData) setBudgetProjections(projectionsData);
+    } catch (error) {
+      console.warn('[AppContext] Failed to refresh budgets:', error);
     }
   };
 
@@ -660,6 +742,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dailySpend,
         quests,
         goals,
+        pendingGoalNotification,
         spendingTrend,
         upcomingBills,
         chatMessages,
@@ -674,6 +757,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         refreshInsight,
         cycleInsight,
         refreshGoals,
+        refreshQuests,
+        refreshBudgets,
+        clearGoalNotification,
         loadChatActions,
         setOnboardingAgreed,
         advanceTutorial,

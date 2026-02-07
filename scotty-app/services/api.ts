@@ -409,14 +409,20 @@ export async function fetchBudgets(): Promise<BudgetItem[]> {
     frequency: string;
     limit_amount: number;
     derived_daily_limit: number;
+    adaptive_enabled?: boolean;
+    adaptive_max_adjust_pct?: number;
+    last_auto_adjusted_at?: string | null;
   }> }>(`/v1/budget?user_id=${DEFAULT_USER_ID}`);
 
   return data.budgets.map(b => ({
     id: b.id,
     category: b.category,
-    frequency: b.frequency as BudgetItem['frequency'],
+    frequency: (b.frequency === 'Day' || b.frequency === 'Year' ? b.frequency : 'Month') as BudgetItem['frequency'],
     limitAmount: b.limit_amount,
     derivedDailyLimit: b.derived_daily_limit,
+    adaptiveEnabled: b.adaptive_enabled ?? true,
+    adaptiveMaxAdjustPct: b.adaptive_max_adjust_pct ?? 10,
+    lastAutoAdjustedAt: b.last_auto_adjusted_at ?? null,
     spent: 0, // computed client-side
   }));
 }
@@ -521,6 +527,8 @@ interface BackendQuest {
   confirmed_value: number;
   pending_value: number;
   explanation: string;
+  created_by?: string; // 'agent' | 'goal_workshop'
+  goal_id?: string; // Reference to savings goal if created from goal workshop
 }
 
 const QUEST_EMOJI: Record<string, string> = {
@@ -553,6 +561,8 @@ function mapBackendQuest(q: BackendQuest, index: number): Quest {
     bgColor: QUEST_COLORS[index % QUEST_COLORS.length],
     status: mapQuestStatus(q.status),
     goalTarget: q.explanation || undefined,
+    createdBy: q.created_by,
+    goalId: q.goal_id,
   };
 }
 
@@ -669,7 +679,9 @@ export async function generateBudgets(apply: boolean = true): Promise<{
 export async function createBudget(
   category: string,
   limitAmount: number,
-  frequency: 'Day' | 'Week' | 'Month' = 'Month'
+  frequency: 'Day' | 'Month' | 'Year' = 'Month',
+  adaptiveEnabled: boolean = true,
+  adaptiveMaxAdjustPct: number = 10,
 ): Promise<any> {
   return apiFetch('/v1/budget', {
     method: 'POST',
@@ -678,6 +690,46 @@ export async function createBudget(
       category,
       limit_amount: limitAmount,
       frequency,
+      adaptive_enabled: adaptiveEnabled,
+      adaptive_max_adjust_pct: adaptiveMaxAdjustPct,
     }),
+  });
+}
+
+export async function updateBudget(
+  budgetId: string,
+  updates: {
+    category?: string;
+    limitAmount?: number;
+    frequency?: 'Day' | 'Month' | 'Year';
+    adaptiveEnabled?: boolean;
+    adaptiveMaxAdjustPct?: number;
+  }
+): Promise<any> {
+  return apiFetch(`/v1/budget/${budgetId}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      category: updates.category,
+      limit_amount: updates.limitAmount,
+      frequency: updates.frequency,
+      adaptive_enabled: updates.adaptiveEnabled,
+      adaptive_max_adjust_pct: updates.adaptiveMaxAdjustPct,
+    }),
+  });
+}
+
+export async function autoAdjustBudgets(): Promise<{
+  adjustments: Array<{
+    budget_id: string;
+    category: string;
+    old_limit_amount: number;
+    new_limit_amount: number;
+    reason: string;
+  }>;
+  skipped: number;
+}> {
+  return apiFetch('/v1/budget/auto-adjust', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: DEFAULT_USER_ID }),
   });
 }

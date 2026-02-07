@@ -22,7 +22,7 @@ export interface BankDataProvider {
 export interface Budget {
   category: string;
   amount: number;
-  period: 'monthly' | 'weekly';
+  period: 'daily' | 'monthly' | 'yearly' | 'weekly';
 }
 
 export interface BudgetProvider {

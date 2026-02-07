@@ -98,7 +98,7 @@ export default function ScottyQuestsModal({
 
   // Filter to goal-linked quests only (Scotty's Quests are for saving toward goals)
   const scottyQuests = useMemo(() => {
-    return quests.filter((q) => q.goalTarget);
+    return quests.filter((q) => q.createdBy === 'goal_workshop');
   }, [quests]);
 
   // Calculate time until midnight reset
