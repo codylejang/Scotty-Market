@@ -57,6 +57,21 @@ export class Orchestrator {
           retryPolicy: { maxAttempts: 3, backoffMs: 1000, exponential: true },
         },
         {
+          name: 'generate_budgets',
+          execute: async (input) => {
+            try {
+              const budgets = await this.adapters.budget.getBudgets(input.userId);
+              if (budgets.length === 0) {
+                // Auto-generate budgets from spending patterns for new users
+                await this.runner.generateBudgetSuggestions(input.userId, { apply: true });
+              }
+            } catch (err: any) {
+              console.warn(`[Orchestrator] Budget generation failed for ${input.userId}:`, err.message);
+            }
+            return input;
+          },
+        },
+        {
           name: 'detect_recurring',
           execute: async (input) => {
             const candidates = detectRecurringCandidates(input.userId);

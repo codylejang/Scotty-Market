@@ -12,6 +12,7 @@ import { useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useApp } from '@/context/AppContext';
+import { useCallback } from 'react';
 import TransactionList from '@/components/TransactionList';
 import SpendingChart from '@/components/SpendingChart';
 import HealthTab from '@/components/HealthTab';
@@ -40,6 +41,7 @@ export default function FeedScreen() {
     spendingTrend,
     quests,
     upcomingBills,
+    refreshGoals,
   } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
   const [showGoalModal, setShowGoalModal] = useState(false);
@@ -167,6 +169,7 @@ export default function FeedScreen() {
       <GoalWorkshopModal
         visible={showGoalModal}
         onClose={() => setShowGoalModal(false)}
+        onGoalCreated={() => refreshGoals()}
       />
       <BudgetBuilderModal
         visible={showBudgetModal}

@@ -102,6 +102,17 @@ export interface BudgetItem {
   spent: number; // computed client-side from transactions
 }
 
+// Goal data from backend
+export interface GoalData {
+  id: string;
+  name: string;
+  targetAmount: number;
+  savedSoFar: number;
+  deadline: string | null;
+  budgetPercent: number;
+  status: string;
+}
+
 // Account data from backend
 export interface AccountInfo {
   id: string;

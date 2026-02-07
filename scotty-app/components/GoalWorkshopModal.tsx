@@ -9,24 +9,66 @@ import {
   Modal,
   ScrollView,
   KeyboardAvoidingView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
+import { createGoal } from '../services/api';
 
 interface GoalWorkshopModalProps {
   visible: boolean;
   onClose: () => void;
+  onGoalCreated?: () => void;
 }
 
-export default function GoalWorkshopModal({ visible, onClose }: GoalWorkshopModalProps) {
+export default function GoalWorkshopModal({ visible, onClose, onGoalCreated }: GoalWorkshopModalProps) {
   const [goalName, setGoalName] = useState('');
   const [targetDate, setTargetDate] = useState('');
   const [savedSoFar, setSavedSoFar] = useState('');
   const [budgetPercent, setBudgetPercent] = useState(10);
   const [totalPrice, setTotalPrice] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = () => {
-    // TODO: integrate with AppContext to create a goal
-    onClose();
+  const handleSubmit = async () => {
+    const amount = parseFloat(totalPrice);
+    if (!goalName || !amount || amount <= 0) {
+      Alert.alert('Missing Info', 'Please enter a goal name and price.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // Parse date from mm/dd/yyyy to ISO
+      let deadline: string | undefined;
+      if (targetDate) {
+        const parts = targetDate.split('/');
+        if (parts.length === 3) {
+          deadline = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+        }
+      }
+
+      await createGoal(
+        goalName,
+        amount,
+        deadline,
+        parseFloat(savedSoFar) || 0,
+        budgetPercent
+      );
+
+      // Reset form
+      setGoalName('');
+      setTargetDate('');
+      setSavedSoFar('');
+      setBudgetPercent(10);
+      setTotalPrice('');
+
+      onGoalCreated?.();
+      onClose();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to save goal. Is the backend running?');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -138,8 +180,16 @@ export default function GoalWorkshopModal({ visible, onClose }: GoalWorkshopModa
               </View>
 
               {/* Submit Button */}
-              <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-                <Text style={styles.submitText}>BREAK IT DOWN, SCOTTY! 🐾</Text>
+              <TouchableOpacity
+                style={[styles.submitButton, submitting && { opacity: 0.6 }]}
+                onPress={handleSubmit}
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitText}>BREAK IT DOWN, SCOTTY! 🐾</Text>
+                )}
               </TouchableOpacity>
             </ScrollView>
           </View>

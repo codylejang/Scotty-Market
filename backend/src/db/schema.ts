@@ -230,4 +230,36 @@ export const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_feeding_user ON feeding_event(user_id);
     `,
   },
+  {
+    version: 5,
+    name: 'goals_and_chat_memory',
+    sql: `
+      -- Goals: user savings targets
+      CREATE TABLE IF NOT EXISTS goal (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES user_profile(id),
+        name TEXT NOT NULL,
+        target_amount REAL NOT NULL,
+        saved_so_far REAL NOT NULL DEFAULT 0,
+        deadline TEXT,
+        budget_percent INTEGER NOT NULL DEFAULT 10,
+        status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','COMPLETED','CANCELLED')),
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_goal_user_status ON goal(user_id, status);
+
+      -- Chat memory: conversational preferences and summaries
+      CREATE TABLE IF NOT EXISTS chat_memory (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES user_profile(id),
+        type TEXT NOT NULL CHECK(type IN ('preference','summary','goal_context')),
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_chat_memory_user ON chat_memory(user_id, type);
+    `,
+  },
 ];

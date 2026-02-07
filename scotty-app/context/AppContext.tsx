@@ -12,6 +12,7 @@ import {
   AccountInfo,
   TransactionCategory,
   Quest,
+  GoalData,
 } from '../types';
 import {
   calculateHealthMetrics,
@@ -33,9 +34,13 @@ import {
   fetchAccounts,
   fetchTodaySpend,
   fetchDailyQuests,
+  refreshDailyQuests,
   fetchSpendingTrend,
   fetchUpcomingBills,
+  fetchGoals,
+  generateBudgets,
   UpcomingBillsData,
+  GoalData as APIGoalData,
 } from '../services/api';
 
 /** Race a promise against a timeout. Rejects if the promise doesn't resolve in time. */
@@ -66,8 +71,9 @@ interface AppState {
   totalBalance: number;
   dailySpend: number;
 
-  // Quests & trends
+  // Quests, goals & trends
   quests: Quest[];
+  goals: GoalData[];
   spendingTrend: { months: string[]; totals: number[] };
   upcomingBills: UpcomingBillsData | null;
 
@@ -83,6 +89,7 @@ interface AppState {
   dismissAchievement: (id: string) => void;
   sendChatMessage: (message: string) => Promise<void>;
   refreshInsight: () => Promise<void>;
+  refreshGoals: () => Promise<void>;
 }
 
 const defaultScottyState: ScottyState = {
@@ -155,6 +162,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [totalBalance, setTotalBalance] = useState(0);
   const [dailySpend, setDailySpend] = useState(0);
   const [quests, setQuests] = useState<Quest[]>([]);
+  const [goals, setGoals] = useState<GoalData[]>([]);
   const [spendingTrend, setSpendingTrend] = useState<{ months: string[]; totals: number[] }>({ months: [], totals: [] });
   const [upcomingBills, setUpcomingBills] = useState<UpcomingBillsData | null>(null);
   const [backendConnected, setBackendConnected] = useState(false);
@@ -288,19 +296,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Non-critical data — keep defaults
     }
 
-    // Fetch quests, spending trend, upcoming bills (non-critical)
+    // Fetch quests, goals, spending trend, upcoming bills (non-critical)
     try {
-      const [questsData, trendData, billsData] = await Promise.all([
+      const [questsData, goalsData, trendData, billsData] = await Promise.all([
         fetchDailyQuests().catch(() => []),
+        fetchGoals().catch(() => []),
         fetchSpendingTrend().catch(() => ({ months: [], totals: [] })),
         fetchUpcomingBills().catch(() => null),
       ]);
 
-      if (questsData.length > 0) setQuests(questsData);
+      if (questsData.length > 0) {
+        setQuests(questsData);
+      } else {
+        // No quests exist yet — trigger daily digest to generate them
+        try {
+          const freshQuests = await refreshDailyQuests();
+          if (freshQuests.length > 0) setQuests(freshQuests);
+        } catch {
+          // Quest generation failed — not critical
+        }
+      }
+      if (goalsData.length > 0) setGoals(goalsData.map(g => ({
+        id: g.id,
+        name: g.name,
+        targetAmount: g.target_amount,
+        savedSoFar: g.saved_so_far,
+        deadline: g.deadline,
+        budgetPercent: g.budget_percent,
+        status: g.status,
+      })));
       if (trendData.months.length > 0) setSpendingTrend(trendData);
       if (billsData) setUpcomingBills(billsData);
     } catch {
       // Non-critical data
+    }
+
+    // Auto-generate budgets if none exist
+    try {
+      if (budgetData.length === 0) {
+        const generated = await generateBudgets(true);
+        if (generated.applied && generated.budgets.length > 0) {
+          const freshBudgets = await fetchBudgets().catch(() => []);
+          if (freshBudgets.length > 0) setBudgets(freshBudgets);
+        }
+      }
+    } catch {
+      // Budget generation failed — not critical
     }
 
     // Daily payload may trigger LLM on first run — fetch separately so it doesn't block above
@@ -419,6 +460,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Refresh goals
+  const refreshGoals = async () => {
+    if (backendConnected) {
+      try {
+        const goalsData = await fetchGoals();
+        setGoals(goalsData.map(g => ({
+          id: g.id,
+          name: g.name,
+          targetAmount: g.target_amount,
+          savedSoFar: g.saved_so_far,
+          deadline: g.deadline,
+          budgetPercent: g.budget_percent,
+          status: g.status,
+        })));
+      } catch {
+        // Keep existing goals
+      }
+    }
+  };
+
   // Refresh insight
   const refreshInsight = async () => {
     if (backendConnected) {
@@ -453,6 +514,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         totalBalance,
         dailySpend,
         quests,
+        goals,
         spendingTrend,
         upcomingBills,
         chatMessages,
@@ -462,6 +524,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dismissAchievement,
         sendChatMessage,
         refreshInsight,
+        refreshGoals,
       }}
     >
       {children}

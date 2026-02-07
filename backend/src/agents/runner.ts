@@ -6,8 +6,16 @@ import { DailyDigestOutput, ChatResponseOutput, TriggerType } from '../schemas';
 import { Adapters } from '../adapters';
 import { buildDualSummary } from '../services/financial-summary';
 import { searchTransactions, detectAnomalies } from '../services/retrieval';
+import { createBudget, listBudgets } from '../services/budget';
 
 export type JobType = 'generate_daily_payload' | 'generate_chat_response' | 'propose_subscription_actions';
+
+export interface BudgetSuggestion {
+  category: string;
+  limit_amount: number;
+  frequency: 'Day' | 'Week' | 'Month';
+  reasoning: string;
+}
 
 interface AgentRunnerConfig {
   adapters: Adapters;
@@ -519,8 +527,10 @@ Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise 
       });
     }
 
-    // Top category insight
+    // Top spending category insight (exclude income/transfer categories)
+    const NON_SPENDING = ['Income', 'Transfer', 'Payment', 'Refund'];
     const topCat = Object.entries(summary7d.by_category as Record<string, number>)
+      .filter(([cat]) => !NON_SPENDING.includes(cat))
       .sort(([, a], [, b]) => b - a)[0];
     if (topCat) {
       const budget = budgets.find(b => b.category === topCat[0]);
@@ -595,6 +605,145 @@ Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise 
       message: `Woof! I'm Scotty, your financial buddy. This week you've spent $${summary7d.total_spent.toFixed(2)}. Ask me about your spending, savings goals, or subscriptions!`,
       recommended_actions: [],
     };
+  }
+
+  /**
+   * Generate budget suggestions based on spending data, goals, and account balance.
+   * Called by orchestrator on first run or on-demand via POST /v1/budgets/generate.
+   */
+  async generateBudgetSuggestions(
+    userId: string,
+    options: { apply?: boolean } = {}
+  ): Promise<BudgetSuggestion[]> {
+    const { summary30d } = buildDualSummary(userId);
+    const existingBudgets = listBudgets(userId);
+
+    // Skip if user already has budgets (don't overwrite manual budgets)
+    if (existingBudgets.length > 0 && !options.apply) {
+      return existingBudgets.map(b => ({
+        category: b.category,
+        limit_amount: b.limit_amount,
+        frequency: 'Month' as const,
+        reasoning: 'Existing budget',
+      }));
+    }
+
+    // Get goals for pressure calculation
+    const db = getDb();
+    const goals = db.prepare(
+      `SELECT * FROM goal WHERE user_id = ? AND status = 'ACTIVE'`
+    ).all(userId) as any[];
+
+    // Estimate monthly income: sum of positive transactions in 30d
+    const incomeEstimate = Math.max(
+      summary30d.total_income || 0,
+      summary30d.total_spent > 0 ? summary30d.total_spent * 1.3 : 3000
+    );
+
+    // Compute per-category budgets from actual 30d spending
+    const suggestions: BudgetSuggestion[] = [];
+    const validCategories = [
+      'Food & Drink', 'Groceries', 'Transportation', 'Entertainment',
+      'Shopping', 'Health', 'Subscription',
+    ];
+    const discretionaryCategories = ['Entertainment', 'Shopping', 'Food & Drink'];
+
+    const byCategory = summary30d.by_category as Record<string, number>;
+
+    // Calculate total goal pressure
+    let monthlyGoalSavings = 0;
+    for (const goal of goals) {
+      if (goal.deadline) {
+        const daysToDeadline = Math.max(1, Math.ceil(
+          (new Date(goal.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        ));
+        const monthsToDeadline = Math.max(1, daysToDeadline / 30);
+        const remaining = Math.max(0, goal.target_amount - (goal.saved_so_far || 0));
+        monthlyGoalSavings += remaining / monthsToDeadline;
+      } else {
+        // No deadline: spread over 6 months
+        const remaining = Math.max(0, goal.target_amount - (goal.saved_so_far || 0));
+        monthlyGoalSavings += remaining / 6;
+      }
+    }
+
+    // Distribute goal pressure across discretionary categories
+    const totalDiscretionary = discretionaryCategories.reduce(
+      (sum, cat) => sum + (byCategory[cat] || 0), 0
+    );
+
+    for (const category of validCategories) {
+      const actualSpend = byCategory[category] || 0;
+      if (actualSpend < 10) continue; // Skip tiny categories
+
+      // Base budget: round up to nearest $5
+      let baseBudget = Math.ceil(actualSpend / 5) * 5;
+      baseBudget = Math.max(baseBudget, 10); // Minimum $10/month
+
+      let reasoning = `Based on $${actualSpend.toFixed(0)} actual spending`;
+
+      // Apply goal pressure to discretionary categories
+      if (monthlyGoalSavings > 0 && discretionaryCategories.includes(category) && totalDiscretionary > 0) {
+        const categoryShare = actualSpend / totalDiscretionary;
+        const reduction = monthlyGoalSavings * categoryShare;
+        const reduced = Math.max(actualSpend * 0.6, baseBudget - reduction); // Never cut below 60%
+        baseBudget = Math.max(10, Math.ceil(reduced / 5) * 5);
+        reasoning += `, reduced for goal savings`;
+      }
+
+      // Over-spending check: if > 25% of income, cap at 80% of actual
+      if (actualSpend > incomeEstimate * 0.25) {
+        baseBudget = Math.min(baseBudget, Math.ceil(actualSpend * 0.8 / 5) * 5);
+        reasoning += `, flagged as over-spending`;
+      }
+
+      // No single category > 40% of total budget
+      if (baseBudget > incomeEstimate * 0.4) {
+        baseBudget = Math.ceil(incomeEstimate * 0.4 / 5) * 5;
+        reasoning += `, capped at 40% of income`;
+      }
+
+      suggestions.push({
+        category,
+        limit_amount: baseBudget,
+        frequency: 'Month',
+        reasoning,
+      });
+    }
+
+    // Sanity check: total budgets should not exceed income
+    const totalBudgets = suggestions.reduce((sum, s) => sum + s.limit_amount, 0);
+    if (totalBudgets > incomeEstimate * 0.9) {
+      const scale = (incomeEstimate * 0.9) / totalBudgets;
+      for (const s of suggestions) {
+        s.limit_amount = Math.max(10, Math.ceil(s.limit_amount * scale / 5) * 5);
+        s.reasoning += ', scaled to fit income';
+      }
+    }
+
+    // Apply to DB if requested
+    if (options.apply) {
+      for (const suggestion of suggestions) {
+        try {
+          createBudget(userId, suggestion.category, suggestion.limit_amount, suggestion.frequency);
+        } catch (err: any) {
+          // UNIQUE constraint = budget already exists, skip
+          if (!err.message?.includes('UNIQUE constraint')) {
+            console.warn(`[AgentRunner] Failed to create budget for ${suggestion.category}:`, err.message);
+          }
+        }
+      }
+    }
+
+    this.logDecision(userId, 'BUDGET_GENERATION', {
+      categories: suggestions.length,
+      total_budget: suggestions.reduce((s, b) => s + b.limit_amount, 0),
+      goal_count: goals.length,
+      monthly_goal_savings: monthlyGoalSavings,
+      applied: !!options.apply,
+    }, { suggestions });
+
+    return suggestions;
   }
 
   /** Public wrapper for logging agent decisions from routes. */
