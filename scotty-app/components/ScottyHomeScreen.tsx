@@ -24,7 +24,7 @@ import ScottyQuestsModal from './ScottyQuestsModal';
 import { Scotty, ScottyRef } from './Scotty';
 import { useApp } from '../context/AppContext';
 import { fetchDailyQuests, refreshDailyQuests } from '../services/api';
-import { BudgetItem, Quest } from '../types';
+import { BudgetItem, Quest, TransactionCategory } from '../types';
 import TutorialModal from './TutorialModal';
 import { TUTORIAL_STEPS } from '../constants/Tutorial';
 
