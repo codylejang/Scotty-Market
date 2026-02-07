@@ -47,6 +47,7 @@ function TransactionCard({ transaction }: { transaction: Transaction }) {
   const isRecurring = transaction.isSubscription;
   const isNew = (new Date().getTime() - transaction.date.getTime()) < 1000 * 60 * 60 * 6; // within 6 hours
   const isBill = transaction.amount >= 100;
+  const isIncoming = transaction.isIncoming === true;
 
   return (
     <View style={styles.card}>
@@ -64,12 +65,17 @@ function TransactionCard({ transaction }: { transaction: Transaction }) {
               <Text style={styles.tagText}>NEW</Text>
             </View>
           )}
+          {isIncoming && (
+            <View style={styles.tagIncoming}>
+              <Text style={styles.tagText}>INCOME</Text>
+            </View>
+          )}
           {isRecurring && (
             <View style={styles.tagRecurring}>
               <Text style={styles.tagText}>RECURRING</Text>
             </View>
           )}
-          {isBill && !isRecurring && (
+          {isBill && !isRecurring && !isIncoming && (
             <View style={styles.tagBill}>
               <Text style={styles.tagText}>BILL</Text>
             </View>
@@ -80,8 +86,10 @@ function TransactionCard({ transaction }: { transaction: Transaction }) {
         </Text>
       </View>
 
-      <View style={styles.amountBadge}>
-        <Text style={styles.amountText}>-${transaction.amount.toFixed(2)}</Text>
+      <View style={[styles.amountBadge, isIncoming && styles.amountBadgeIncoming]}>
+        <Text style={[styles.amountText, isIncoming && styles.amountTextIncoming]}>
+          {isIncoming ? '+' : '-'}${transaction.amount.toFixed(2)}
+        </Text>
       </View>
     </View>
   );
@@ -302,6 +310,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
+  tagIncoming: {
+    backgroundColor: '#c8e6c9',
+    borderWidth: 1,
+    borderColor: '#000',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
   tagRecurring: {
     backgroundColor: '#e1bee7',
     borderWidth: 1,
@@ -336,11 +352,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     marginLeft: 8,
   },
+  amountBadgeIncoming: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#4caf50',
+  },
   amountText: {
     fontFamily: FONT,
     fontSize: 12,
     fontWeight: '900',
     color: '#ff6b6b',
+  },
+  amountTextIncoming: {
+    color: '#4caf50',
   },
 });
 

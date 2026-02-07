@@ -14,6 +14,7 @@ import {
   Quest,
   GoalData,
   ChatAction,
+  BudgetProjectionsResponse,
 } from '../types';
 import {
   calculateHealthMetrics,
@@ -34,6 +35,7 @@ import {
   fetchActiveQuest,
   mapInsightToFrontend,
   fetchBudgets,
+  fetchBudgetProjections,
   fetchAccounts,
   fetchTodaySpend,
   fetchDailyQuests,
@@ -76,6 +78,9 @@ interface AppState {
   accounts: AccountInfo[];
   totalBalance: number;
   dailySpend: number;
+
+  // Budget projections
+  budgetProjections: BudgetProjectionsResponse | null;
 
   // Quests, goals & trends
   quests: Quest[];
@@ -189,6 +194,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
   const [dailySpend, setDailySpend] = useState(0);
+  const [budgetProjections, setBudgetProjections] = useState<BudgetProjectionsResponse | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
   const [goals, setGoals] = useState<GoalData[]>([]);
   const [spendingTrend, setSpendingTrend] = useState<{ months: string[]; totals: number[] }>({ months: [], totals: [] });
@@ -325,24 +331,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Fetch budgets, accounts, daily spend (non-critical, don't block)
     try {
-      const [budgetData, accountData, todaySpend] = await Promise.all([
+      const [budgetData, accountData, todaySpend, projectionsData] = await Promise.all([
         fetchBudgets().catch((err) => { console.warn('[AppContext] Budget fetch failed:', err); return []; }),
         fetchAccounts().catch((err) => { console.warn('[AppContext] Accounts fetch failed:', err); return { accounts: [] as AccountInfo[], totalBalance: 0 }; }),
         fetchTodaySpend().catch((err) => { console.warn('[AppContext] Daily spend fetch failed:', err); return 0; }),
+        fetchBudgetProjections().catch((err) => { console.warn('[AppContext] Projections fetch failed:', err); return null; }),
       ]);
 
       if (budgetData.length > 0) {
         // Compute spent per budget category from transactions
+        // Group Groceries into Food & Drink so grocery spend counts toward that budget
+        const catMap: Record<string, string[]> = {
+          'Food & Drink': ['food_dining', 'groceries'],
+          'Groceries': ['groceries'],
+          'Transportation': ['transport'],
+          'Entertainment': ['entertainment'],
+          'Shopping': ['shopping'],
+          'Health': ['health'],
+          'Subscription': ['subscriptions'],
+        };
         const today = new Date();
         const budgetsWithSpend = budgetData.map(b => {
-          const catTxns = txns.filter(t => {
-            const catMap: Record<string, string> = {
-              'Food & Drink': 'food_dining', 'Groceries': 'groceries',
-              'Transportation': 'transport', 'Entertainment': 'entertainment',
-              'Shopping': 'shopping', 'Health': 'health', 'Subscription': 'subscriptions',
-            };
-            return t.category === (catMap[b.category] || 'other');
-          });
+          const matchCategories = catMap[b.category] || ['other'];
+          const catTxns = txns.filter(t => matchCategories.includes(t.category));
           // Sum spending in current period
           const periodDays = b.frequency === 'Day' ? 1 : b.frequency === 'Week' ? 7 : 30;
           const periodStart = new Date(today);
@@ -352,11 +363,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return { ...b, spent: Math.round(spent * 100) / 100 };
         });
         setBudgets(budgetsWithSpend);
+
+        // Derive daily spend from budget daily rates (consistent with budget dashboard)
+        const computedDailySpend = budgetsWithSpend.reduce((sum, b) => {
+          const pDays = b.frequency === 'Day' ? 1 : b.frequency === 'Week' ? 7 : 30;
+          return sum + b.spent / pDays;
+        }, 0);
+        setDailySpend(Math.round(computedDailySpend * 100) / 100);
+      } else {
+        setDailySpend(todaySpend);
       }
 
       setAccounts(accountData.accounts);
       setTotalBalance(accountData.totalBalance);
-      setDailySpend(todaySpend);
+      if (projectionsData) setBudgetProjections(projectionsData);
       
       console.log('[AppContext] Financial data loaded:', {
         budgets: budgetData.length,
@@ -619,6 +639,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         healthMetrics,
         dailyInsight,
         budgets,
+        budgetProjections,
         accounts,
         totalBalance,
         dailySpend,

@@ -18,13 +18,14 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import AnimatedProgressBar from './AnimatedProgressBar';
+import DailySpendRing from './DailySpendRing';
 import DraggableFoodItem from './DraggableFoodItem';
 import HeartBurst from './HeartBurst';
 import ScottyQuestsModal from './ScottyQuestsModal';
 import { Scotty, ScottyRef } from './Scotty';
 import { useApp } from '../context/AppContext';
 import { fetchDailyQuests, refreshDailyQuests } from '../services/api';
-import { BudgetItem, Quest, TransactionCategory } from '../types';
+import { BudgetItem, Quest, TransactionCategory, BudgetProjectionsResponse } from '../types';
 import TutorialModal from './TutorialModal';
 import { TUTORIAL_STEPS } from '../constants/Tutorial';
 import { Colors, Shadows } from '../constants/Theme';
@@ -135,6 +136,7 @@ export default function ScottyHomeScreen({
   const {
     feedScotty,
     budgets,
+    budgetProjections,
     totalBalance,
     dailySpend,
     scottyState,
@@ -301,12 +303,20 @@ export default function ScottyHomeScreen({
       limit: number;
       percent: number;
       projection: number;
+      overBudget: boolean;
       color: string;
     }>> = { Daily: [], Monthly: [], Yearly: [] };
 
+    // Build a lookup from projections by category
+    const projectionMap = new Map<string, { projectedPercent: number; overBudget: boolean; dailyRate7d: number }>();
+    if (budgetProjections?.projections) {
+      for (const p of budgetProjections.projections) {
+        projectionMap.set(p.category, { projectedPercent: p.projectedPercent, overBudget: p.overBudget, dailyRate7d: p.dailyRate7d });
+      }
+    }
+
     budgets.forEach((budget, index) => {
       const dailyLimit = getDailyLimit(budget);
-      // budget.spent is computed over the budget's frequency period (typically 30 days for Monthly)
       const budgetPeriodDays = budget.frequency === 'Day' ? 1 : budget.frequency === 'Week' ? 7 : 30;
       const dailySpendRate = budgetPeriodDays > 0 ? budget.spent / budgetPeriodDays : 0;
 
@@ -323,10 +333,35 @@ export default function ScottyHomeScreen({
       const emoji = CATEGORY_EMOJI[budget.category] || '📊';
       const color = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
 
+      // Look up AI projection for this category
+      const proj = projectionMap.get(budget.category);
+
       (Object.keys(limits) as BudgetTab[]).forEach((tab) => {
         const limit = limits[tab];
         const spent = spentByTab[tab];
         const percent = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+
+        // Tab-aware projections:
+        // Daily: project based on recent 7-day daily rate vs daily limit
+        // Monthly: use backend's period projection (default)
+        // Yearly: extrapolate from monthly projection
+        let projection: number;
+        let overBudget: boolean;
+        if (proj) {
+          if (tab === 'Daily') {
+            projection = dailyLimit > 0
+              ? Math.round((proj.dailyRate7d / dailyLimit) * 100)
+              : 0;
+          } else {
+            // Monthly and Yearly use the same period-based projection ratio
+            projection = proj.projectedPercent;
+          }
+          overBudget = projection > 100;
+        } else {
+          projection = percent;
+          overBudget = percent > 100;
+        }
+
         byTab[tab].push({
           id: `${budget.id}-${tab}`,
           emoji,
@@ -334,14 +369,15 @@ export default function ScottyHomeScreen({
           spent,
           limit,
           percent,
-          projection: percent,
+          projection,
+          overBudget,
           color,
         });
       });
     });
 
     return byTab;
-  }, [budgets]);
+  }, [budgets, budgetProjections]);
 
   const handleTutorialPrimary = () => {
     if (!currentStep) return;
@@ -447,14 +483,13 @@ export default function ScottyHomeScreen({
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>DAILY SPEND</Text>
-            <Text style={styles.summaryValueLarge}>{formatCurrency(dailySpend)}</Text>
-            <AnimatedProgressBar
-              targetPercent={dailySpendPercent}
-              color="#ff6b6b"
-              delay={500}
-              height={6}
-              small
-            />
+            <View style={styles.dailySpendRingRow}>
+              <DailySpendRing spent={dailySpend} limit={totalDailyLimit} size={72} />
+              <View style={styles.dailySpendText}>
+                <Text style={styles.summaryValueMedium}>{formatCurrency(dailySpend)}</Text>
+                <Text style={styles.dailySpendLimit}>of {formatCurrency(totalDailyLimit)}</Text>
+              </View>
+            </View>
           </View>
 
           <View style={styles.summaryCard}>
@@ -536,10 +571,12 @@ export default function ScottyHomeScreen({
                       <Text
                         style={[
                           styles.budgetProjection,
-                          budget.projection > 100 && styles.budgetProjectionWarning,
+                          budget.overBudget && styles.budgetProjectionWarning,
                         ]}
                       >
-                        Projected End: {budget.projection}%
+                        {budget.overBudget
+                          ? `OVER BUDGET! Projected: ${budget.projection}%`
+                          : `Projected End: ${budget.projection}%`}
                       </Text>
                     </View>
                   ))
@@ -917,6 +954,28 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: '#000',
+  },
+  summaryValueMedium: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+  },
+  dailySpendRingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  dailySpendText: {
+    flex: 1,
+  },
+  dailySpendLimit: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#999',
+    marginTop: 2,
   },
   summaryValuePurple: {
     color: '#9b59b6',

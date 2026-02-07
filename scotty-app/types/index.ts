@@ -9,6 +9,7 @@ export interface Transaction {
   merchant: string;
   date: Date;
   isSubscription?: boolean;
+  isIncoming?: boolean;
 }
 
 export type TransactionCategory =
@@ -124,6 +125,27 @@ export interface GoalData {
   deadline: string | null;
   budgetPercent: number;
   status: string;
+}
+
+// Budget projection data from backend
+export interface BudgetProjection {
+  category: string;
+  currentSpent: number;
+  budgetLimit: number;
+  projectedSpend: number;
+  projectedPercent: number;
+  overBudget: boolean;
+  dailyRate7d: number;
+  dailyRatePeriod: number;
+}
+
+export interface BudgetProjectionsResponse {
+  projections: BudgetProjection[];
+  dailySummary: {
+    totalDailySpent: number;
+    totalDailyLimit: number;
+    projectedDailyPercent: number;
+  };
 }
 
 // Account data from backend
