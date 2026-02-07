@@ -30,6 +30,7 @@ import {
   fetchUserProfile,
   feedScottyAPI,
   sendChatMessageAPI,
+  setScottyHappiness,
   fetchActiveQuest,
   mapInsightToFrontend,
   fetchBudgets,
@@ -603,6 +604,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     AsyncStorage.removeItem(TUTORIAL_STORAGE_KEY).catch(() => undefined);
     setTutorialStep(0);
     setTutorialActive(true);
+    // Set Scotty's happiness to 56 (sad) at tutorial start
+    setScottyState((prev) => ({ ...prev, happiness: 56, mood: 'sad' }));
+    setScottyHappiness(56).catch(() => undefined);
   };
 
   return (

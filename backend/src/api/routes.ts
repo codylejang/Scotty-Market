@@ -171,6 +171,24 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
     }
   });
 
+  // ─── POST /v1/scotty/set-happiness ───
+  router.post('/v1/scotty/set-happiness', async (req: Request, res: Response) => {
+    try {
+      const { user_id, happiness } = req.body;
+      if (!user_id || happiness == null) return res.status(400).json({ error: 'user_id and happiness required' });
+
+      const clamped = Math.max(0, Math.min(100, happiness));
+      const mood = clamped >= 60 ? 'happy' : 'sad';
+      const db = getDb();
+      db.prepare(`
+        UPDATE scotty_state SET happiness = ?, mood = ?, last_fed = datetime('now'), updated_at = datetime('now') WHERE user_id = ?
+      `).run(clamped, mood, user_id);
+      res.json({ happiness: clamped, mood });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ─── GET /v1/scotty/state ───
   router.get('/v1/scotty/state', async (req: Request, res: Response) => {
     try {
@@ -194,15 +212,34 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
         });
       }
 
+      // ─── Happiness Decay ───
+      // Scotty loses 2 happiness per hour since last fed (or last updated if never fed).
+      // Floor is 10 so he never hits absolute zero.
+      let happiness = state.happiness;
+      const referenceTime = state.last_fed || state.updated_at;
+      if (referenceTime) {
+        const hoursSince = (Date.now() - new Date(referenceTime).getTime()) / (1000 * 60 * 60);
+        const decay = Math.floor(hoursSince) * 2;
+        if (decay > 0) {
+          happiness = Math.max(10, happiness - decay);
+          const newMood = happiness >= 60 ? 'happy' : 'sad';
+          db.prepare(`
+            UPDATE scotty_state SET happiness = ?, mood = ?, updated_at = datetime('now') WHERE user_id = ?
+          `).run(happiness, newMood, userId);
+        }
+      }
+
+      const mood = happiness >= 60 ? 'happy' : 'sad';
+
       res.json({
-        happiness: state.happiness,
-        mood: state.mood,
+        happiness,
+        mood,
         last_fed: state.last_fed,
         food_credits: state.food_credits,
         last_reward_food: state.last_reward_food,
         last_reward_at: state.last_reward_at,
         growthLevel: state.growth_level || 1,
-        happinessPercent: state.happiness,
+        happinessPercent: happiness,
         staminaPercent: state.stamina ?? 100,
       });
     } catch (err: any) {
@@ -239,7 +276,7 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
 
       const newHappiness = Math.min(100, state.happiness + happinessBoost);
       const newCredits = Math.max(0, state.food_credits - cost);
-      const newMood = newHappiness >= 80 ? 'happy' : newHappiness >= 60 ? 'content' : newHappiness >= 40 ? 'worried' : 'sad';
+      const newMood = newHappiness >= 60 ? 'happy' : 'sad';
       const now = new Date().toISOString();
 
       db.prepare(`
@@ -503,7 +540,7 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
         const deltaS = effect.stamina * qty;
         const newHappiness = Math.min(100, Math.max(0, (state.happiness || 70) + deltaH));
         const newStamina = Math.min(100, Math.max(0, (state.stamina || 100) + deltaS));
-        const newMood = newHappiness >= 80 ? 'happy' : newHappiness >= 60 ? 'content' : newHappiness >= 40 ? 'worried' : 'sad';
+        const newMood = newHappiness >= 60 ? 'happy' : 'sad';
 
         // Growth level: every 20 feeding events = +1 level
         const feedCount = (db.prepare(

@@ -259,8 +259,8 @@ export default function ScottyHomeScreen({
       // Trigger Scotty's loved animation
       scottyAnimRef.current?.showLoved();
 
-      // Call context feedScotty
-      feedScotty('treat');
+      // Call context feedScotty — meat is a meal, others are treats
+      feedScotty(type === 'coffee' ? 'meal' : 'treat');
 
       // If we're on the interactive tutorial feed step, advance after a short delay
       if (isWaitingForFeed) {
@@ -388,27 +388,27 @@ export default function ScottyHomeScreen({
                 style={styles.scottyWrapper}
                 onLayout={handleScottyLayout}
               >
-                <Scotty ref={scottyAnimRef} size={160} />
+                <Scotty ref={scottyAnimRef} size={160} mood={scottyState.mood} />
               </View>
             </View>
 
             <View style={styles.categoryIcons}>
               <DraggableFoodItem
-                emoji="☕"
+                emoji="🧋"
+                count={foodCounts.food}
+                bgColor="#FFD8B1"
+                scottyLayout={scottyLayout}
+                onFeed={() => handleFeed('food')}
+              />
+              <DraggableFoodItem
+                emoji="🥩"
                 count={foodCounts.coffee}
                 bgColor="#e1bee7"
                 scottyLayout={scottyLayout}
                 onFeed={() => handleFeed('coffee')}
               />
               <DraggableFoodItem
-                emoji="🍴"
-                count={foodCounts.food}
-                bgColor="#fff9c4"
-                scottyLayout={scottyLayout}
-                onFeed={() => handleFeed('food')}
-              />
-              <DraggableFoodItem
-                emoji="🐾"
+                emoji="🍎"
                 count={foodCounts.pets}
                 bgColor="#c8e6c9"
                 scottyLayout={scottyLayout}
@@ -461,11 +461,6 @@ export default function ScottyHomeScreen({
             <Text style={styles.summaryLabel}>BANK TOTAL</Text>
             <Text style={[styles.summaryValueLarge, styles.summaryValuePurple]}>
               {totalBalance > 0 ? formatCompact(totalBalance) : '$--'}
-            </Text>
-            <Text style={styles.todayIncome}>
-              {totalDailyLimit > 0
-                ? `${dailySpendPercent}% of daily budget used`
-                : 'No daily budget set'}
             </Text>
           </View>
         </View>
@@ -902,6 +897,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     minHeight: 110,
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 4, height: 4 },
     shadowOpacity: 1,

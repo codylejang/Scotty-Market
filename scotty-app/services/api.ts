@@ -299,6 +299,13 @@ export async function sendChatMessageAPI(message: string): Promise<{ response: s
   return { response: data.response, actions: data.suggested_actions || [] };
 }
 
+export async function setScottyHappiness(happiness: number): Promise<void> {
+  await apiFetch('/v1/scotty/set-happiness', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: DEFAULT_USER_ID, happiness }),
+  });
+}
+
 export async function fetchChatSuggestedActions(): Promise<ChatAction[]> {
   try {
     const data = await apiFetch<{ actions: ChatAction[] }>(

@@ -1,6 +1,6 @@
 // Core types for Scotty app
 
-export type MoodState = 'happy' | 'content' | 'worried' | 'sad';
+export type MoodState = 'happy' | 'sad';
 
 export interface Transaction {
   id: string;
