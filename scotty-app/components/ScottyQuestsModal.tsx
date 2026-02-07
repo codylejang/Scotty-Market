@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,25 +9,27 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Quest } from '../types';
+import { Quest, GoalData } from '../types';
 
-function ModalQuestCard({ quest }: { quest: Quest }) {
+function ModalQuestCard({ quest, onDelete }: { quest: Quest; onDelete?: (id: string) => void }) {
   const [showInfo, setShowInfo] = useState(false);
-  const progressPercent = (quest.progress / quest.goal) * 100;
-  const isComplete = quest.progress >= quest.goal;
+  const progressPercent = quest.goal > 0 ? (quest.progress / quest.goal) * 100 : 0;
+  const isComplete = quest.goal > 0 && quest.progress >= quest.goal;
 
   return (
     <View style={styles.questCard}>
       <View style={styles.questContent}>
         {/* Icon Section */}
         <View style={styles.iconSection}>
-          <TouchableOpacity
-            style={styles.infoButton}
-            onPress={() => setShowInfo(!showInfo)}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          >
-            <Text style={styles.infoButtonText}>{showInfo ? '✕' : 'i'}</Text>
-          </TouchableOpacity>
+          {onDelete && (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => onDelete(quest.id)}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Text style={styles.deleteButtonText}>🗑</Text>
+            </TouchableOpacity>
+          )}
           <View style={[styles.iconBox, { backgroundColor: quest.bgColor }]}>
             <Text style={styles.iconEmoji}>{quest.emoji}</Text>
           </View>
@@ -76,17 +78,28 @@ interface ScottyQuestsModalProps {
   visible: boolean;
   onClose: () => void;
   quests: Quest[];
+  goals?: GoalData[];
   onRefreshQuests?: () => void;
+  onDeleteQuest?: (id: string) => void;
 }
 
 export default function ScottyQuestsModal({
   visible,
   onClose,
   quests,
+  goals = [],
   onRefreshQuests,
+  onDeleteQuest,
 }: ScottyQuestsModalProps) {
   const [showRefreshNotification, setShowRefreshNotification] = useState(false);
   const [timeUntilReset, setTimeUntilReset] = useState('12:45:00');
+
+  const hasGoals = goals.length > 0;
+
+  // Filter to goal-linked quests only (Scotty's Quests are for saving toward goals)
+  const scottyQuests = useMemo(() => {
+    return quests.filter((q) => q.goalTarget);
+  }, [quests]);
 
   // Calculate time until midnight reset
   useEffect(() => {
@@ -94,12 +107,12 @@ export default function ScottyQuestsModal({
       const now = new Date();
       const midnight = new Date();
       midnight.setHours(24, 0, 0, 0);
-      
+
       const diff = midnight.getTime() - now.getTime();
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-      
+
       setTimeUntilReset(
         `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
       );
@@ -144,9 +157,23 @@ export default function ScottyQuestsModal({
             contentContainerStyle={styles.questListContent}
             showsVerticalScrollIndicator={false}
           >
-            {quests.map((quest) => (
-              <ModalQuestCard key={quest.id} quest={quest} />
-            ))}
+            {hasGoals && scottyQuests.length > 0 ? (
+              scottyQuests.map((quest) => (
+                <ModalQuestCard key={quest.id} quest={quest} onDelete={onDeleteQuest} />
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyEmoji}>🐾</Text>
+                <Text style={styles.emptyText}>
+                  {hasGoals ? 'No quests yet!' : 'No goals set!'}
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  {hasGoals
+                    ? 'Tap the button below to generate quests for your savings goals.'
+                    : 'Set a savings goal first, then Scotty will create quests to help you reach it.'}
+                </Text>
+              </View>
+            )}
           </ScrollView>
 
           {/* Footer */}
@@ -154,14 +181,15 @@ export default function ScottyQuestsModal({
             <TouchableOpacity
               style={styles.refreshButton}
               onPress={handleRefreshQuests}
+              disabled={!hasGoals}
             >
               <LinearGradient
-                colors={['#ff6b6b', '#9b59b6']}
+                colors={hasGoals ? ['#ff6b6b', '#9b59b6'] : ['#ccc', '#aaa']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.refreshGradient}
               >
-                <Text style={styles.refreshButtonText}>GET NEW DAILY QUESTS</Text>
+                <Text style={styles.refreshButtonText}>GET NEW SCOTTY QUESTS</Text>
               </LinearGradient>
               {showRefreshNotification && (
                 <View style={styles.notification}>
@@ -446,5 +474,47 @@ const styles = StyleSheet.create({
     color: '#9b59b6',
     marginTop: 6,
     letterSpacing: 0.5,
+  },
+
+  // Delete Button
+  deleteButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  deleteButtonText: {
+    fontSize: 18,
+    opacity: 0.4,
+  },
+
+  // Empty State
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontFamily: FONT,
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 1,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontFamily: FONT,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Platform,
   LayoutChangeEvent,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -90,16 +91,34 @@ function QuestCard({ quest, index }: { quest: Quest; index: number }) {
   const percent = quest.goal > 0
     ? Math.min(100, Math.round((quest.progress / quest.goal) * 100))
     : 0;
+  const isComplete = quest.status === 'completed';
+  const isFailed = quest.status === 'failed';
+  const isOverBudget = quest.status === 'active' && quest.goal > 0 && quest.progress >= quest.goal;
   const colors = ['#ff8a65', '#9b59b6', '#81d4fa'];
   const iconStyles = [undefined, styles.goalIconBlue, styles.goalIconGreen];
 
   return (
-    <View style={styles.goalCard}>
+    <View style={[
+      styles.goalCard,
+      isComplete && styles.goalCardComplete,
+      isFailed && styles.goalCardFailed,
+    ]}>
       <View style={styles.goalHeader}>
         <View style={[styles.goalIcon, iconStyles[index]]}>
-          <Text style={styles.goalIconText}>{quest.emoji}</Text>
+          <Text style={styles.goalIconText}>
+            {isComplete ? '✅' : isFailed ? '❌' : quest.emoji}
+          </Text>
         </View>
-        <Text style={styles.goalTitle} numberOfLines={2}>{quest.title.toUpperCase()}</Text>
+        <Text
+          style={[
+            styles.goalTitle,
+            isComplete && styles.goalTitleComplete,
+            isFailed && styles.goalTitleFailed,
+          ]}
+          numberOfLines={2}
+        >
+          {quest.title.toUpperCase()}
+        </Text>
         <TouchableOpacity
           style={styles.questInfoButton}
           onPress={() => setShowInfo(!showInfo)}
@@ -108,16 +127,25 @@ function QuestCard({ quest, index }: { quest: Quest; index: number }) {
           <Text style={styles.questInfoButtonText}>{showInfo ? '✕' : 'i'}</Text>
         </TouchableOpacity>
       </View>
-      <Text style={styles.goalAmount}>
-        {quest.goal > 0
-          ? `$${quest.progress.toFixed(0)} / $${quest.goal.toFixed(0)}`
-          : `${quest.progress} ${quest.progressUnit}`}
-      </Text>
-      <AnimatedProgressBar
-        targetPercent={percent}
-        color={colors[index % colors.length]}
-        delay={100 + index * 150}
-      />
+      {isComplete ? (
+        <Text style={styles.goalCompleteLabel}>QUEST CLEARED  +{quest.xpReward} XP</Text>
+      ) : isFailed ? (
+        <Text style={styles.goalFailedLabel}>QUEST FAILED</Text>
+      ) : (
+        <>
+          <Text style={[styles.goalAmount, isOverBudget && styles.goalAmountOver]}>
+            {quest.goal > 0
+              ? `$${quest.progress.toFixed(0)} / $${quest.goal.toFixed(0)}`
+              : `${quest.progress} ${quest.progressUnit}`}
+            {isOverBudget ? '  OVER!' : ''}
+          </Text>
+          <AnimatedProgressBar
+            targetPercent={percent}
+            color={isOverBudget ? '#ff6b6b' : colors[index % colors.length]}
+            delay={100 + index * 150}
+          />
+        </>
+      )}
       {showInfo && (
         <View style={styles.questInfoBox}>
           <Text style={styles.questInfoText}>{quest.subtitle}</Text>
@@ -147,11 +175,13 @@ export default function ScottyHomeScreen({
     feedScotty,
     budgets,
     budgetProjections,
+    transactions,
     totalBalance,
     dailySpend,
     scottyState,
     dailyInsight,
     quests: contextQuests,
+    goals,
     tutorial,
     advanceTutorial,
     skipTutorial,
@@ -198,6 +228,56 @@ export default function ScottyHomeScreen({
       console.log('Failed to refresh quests');
     }
   }, []);
+
+  // Resync daily quests — re-fetches latest state (picks up validation agent results)
+  const [isSyncing, setIsSyncing] = useState(false);
+  const handleResyncQuests = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const latest = await fetchDailyQuests();
+      setQuests(latest);
+    } catch (error) {
+      console.log('Failed to resync quests');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
+
+  // Demo popup — hardcoded yesterday's completed quest that awards food credits
+  const [showDemoModal, setShowDemoModal] = useState(false);
+  const [demoClaimed, setDemoClaimed] = useState(false);
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+
+  const DEMO_QUEST: Quest = {
+    id: 'demo_yesterday',
+    title: 'Skip Starbucks',
+    subtitle: 'No Starbucks charges detected yesterday. Scotty verified your transactions!',
+    emoji: '☕',
+    xpReward: 50,
+    progress: 0,
+    goal: 1,
+    progressUnit: 'charges',
+    bgColor: '#c8e6c9',
+    status: 'completed',
+  };
+
+  const handleClaimReward = useCallback(() => {
+    setDemoClaimed(true);
+    // Award food credits to Scotty
+    feedScotty('treat');
+    setFoodCounts((prev) => ({ ...prev, food: prev.food + 2 }));
+    setTimeout(() => {
+      setShowDemoModal(false);
+      // Reset for re-demo
+      setTimeout(() => setDemoClaimed(false), 500);
+    }, 1500);
+  }, [feedScotty]);
 
   // Scotty position for drop-zone detection
   const [scottyLayout, setScottyLayout] = useState<{
@@ -304,6 +384,35 @@ export default function ScottyHomeScreen({
     ? Math.min(100, Math.round((dailySpend / totalDailyLimit) * 100))
     : 0;
 
+  // Compute today's actual spending per budget category from real transactions
+  const todaySpendByCategory = useMemo(() => {
+    const catMap: Record<string, string[]> = {
+      'Food & Drink': ['food_dining', 'groceries'],
+      'Groceries': ['groceries'],
+      'Transportation': ['transport'],
+      'Entertainment': ['entertainment'],
+      'Shopping': ['shopping'],
+      'Health': ['health'],
+      'Subscription': ['subscriptions'],
+    };
+    const now = new Date();
+
+    const result: Record<string, number> = {};
+    for (const [budgetCat, frontendCats] of Object.entries(catMap)) {
+      const todayTxns = transactions.filter(t => {
+        // Match "today" the same way TransactionList does: time diff < 24 hours
+        const d = t.date instanceof Date ? t.date : new Date(t.date);
+        const diffMs = now.getTime() - d.getTime();
+        const isToday = diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
+        return isToday
+          && frontendCats.includes(t.category)
+          && !t.isIncoming;
+      });
+      result[budgetCat] = todayTxns.reduce((sum, t) => sum + t.amount, 0);
+    }
+    return result;
+  }, [transactions]);
+
   const budgetsByTab = useMemo(() => {
     const byTab: Record<BudgetTab, Array<{
       id: string;
@@ -335,10 +444,12 @@ export default function ScottyHomeScreen({
         Monthly: dailyLimit * 30,
         Yearly: dailyLimit * 365,
       };
+      // Daily: today's actual spending; Monthly: period total; Yearly: extrapolated from monthly
+      const todayCatSpend = todaySpendByCategory[budget.category] || 0;
       const spentByTab: Record<BudgetTab, number> = {
-        Daily: dailySpendRate,
-        Monthly: dailySpendRate * 30,
-        Yearly: dailySpendRate * 365,
+        Daily: todayCatSpend,
+        Monthly: budget.spent,
+        Yearly: budget.spent * 12,
       };
       const emoji = CATEGORY_EMOJI[budget.category] || '📊';
       const color = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
@@ -387,7 +498,7 @@ export default function ScottyHomeScreen({
     });
 
     return byTab;
-  }, [budgets, budgetProjections]);
+  }, [budgets, budgetProjections, todaySpendByCategory]);
 
   const handleTutorialPrimary = () => {
     if (!currentStep) return;
@@ -482,7 +593,28 @@ export default function ScottyHomeScreen({
 
         {/* Daily Quests Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeaderTitle}>DAILY QUESTS</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionHeaderTitle}>DAILY QUESTS</Text>
+            <View style={styles.sectionHeaderButtons}>
+              <TouchableOpacity
+                style={styles.resyncButton}
+                onPress={handleResyncQuests}
+                disabled={isSyncing}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[styles.resyncText, isSyncing && styles.resyncTextDisabled]}>
+                  {isSyncing ? '...' : '↻ SYNC'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.demoButton}
+                onPress={() => setShowDemoModal(true)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.demoButtonText}>DEMO</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {quests.slice(0, 3).map((quest, index) => (
             <QuestCard key={quest.id} quest={quest} index={index} />
@@ -612,11 +744,83 @@ export default function ScottyHomeScreen({
         </View>
       )}
 
+      {/* Demo Quest Reward Modal */}
+      <Modal
+        visible={showDemoModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowDemoModal(false)}
+      >
+        <View style={styles.demoOverlay}>
+          <View style={styles.demoModalContainer}>
+            {/* Header */}
+            <View style={styles.demoModalHeader}>
+              <Text style={styles.demoModalTitle}>YESTERDAY'S QUEST</Text>
+              <Text style={styles.demoModalDate}>{yesterdayStr}</Text>
+              <TouchableOpacity
+                onPress={() => setShowDemoModal(false)}
+                style={styles.demoCloseBtn}
+              >
+                <View style={styles.demoCloseBtnInner}>
+                  <Text style={styles.demoCloseText}>✕</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Quest Card */}
+            <View style={styles.demoQuestCard}>
+              <View style={styles.demoQuestRow}>
+                <View style={[styles.goalIcon, { backgroundColor: DEMO_QUEST.bgColor }]}>
+                  <Text style={styles.goalIconText}>{DEMO_QUEST.emoji}</Text>
+                </View>
+                <View style={styles.demoQuestDetails}>
+                  <Text style={styles.demoQuestTitle}>{DEMO_QUEST.title.toUpperCase()}</Text>
+                  <Text style={styles.demoQuestXp}>+{DEMO_QUEST.xpReward} XP</Text>
+                </View>
+              </View>
+              <Text style={styles.demoQuestSubtitle}>{DEMO_QUEST.subtitle}</Text>
+              <View style={styles.demoVerifiedBadge}>
+                <Text style={styles.demoVerifiedText}>✅ VERIFIED BY SCOTTY</Text>
+              </View>
+            </View>
+
+            {/* Reward */}
+            <View style={styles.demoRewardSection}>
+              <Text style={styles.demoRewardLabel}>REWARD EARNED</Text>
+              <View style={styles.demoRewardRow}>
+                <Text style={styles.demoRewardEmoji}>🧋</Text>
+                <Text style={styles.demoRewardName}>2x Boba Treats</Text>
+              </View>
+              <Text style={styles.demoRewardHint}>Feed these to Scotty to boost happiness!</Text>
+            </View>
+
+            {/* Claim Button */}
+            <TouchableOpacity
+              style={styles.demoClaimButton}
+              onPress={handleClaimReward}
+              disabled={demoClaimed}
+            >
+              <LinearGradient
+                colors={demoClaimed ? ['#4caf50', '#66bb6a'] : ['#ff6b6b', '#9b59b6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.demoClaimGradient}
+              >
+                <Text style={styles.demoClaimText}>
+                  {demoClaimed ? 'CLAIMED!' : 'CLAIM REWARD'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Quests Modal */}
       <ScottyQuestsModal
         visible={showQuestsModal}
         onClose={onCloseQuestsModal || (() => {})}
         quests={quests}
+        goals={goals}
         onRefreshQuests={handleRefreshQuests}
       />
 
@@ -813,13 +1017,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 12,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   sectionHeaderTitle: {
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontSize: 16,
     fontWeight: '900',
     color: '#000',
     letterSpacing: 2,
-    marginBottom: 12,
+  },
+  resyncButton: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#000',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
+  },
+  resyncText: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 1,
+  },
+  resyncTextDisabled: {
+    color: '#999',
   },
 
   // Goal Cards
@@ -834,6 +1066,40 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 0,
     elevation: 4,
+  },
+  goalCardComplete: {
+    opacity: 0.55,
+    borderColor: '#4caf50',
+  },
+  goalTitleComplete: {
+    textDecorationLine: 'line-through',
+    color: '#999',
+  },
+  goalCompleteLabel: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#4caf50',
+    letterSpacing: 2,
+  },
+  goalCardFailed: {
+    opacity: 0.4,
+    borderColor: '#ff6b6b',
+  },
+  goalTitleFailed: {
+    textDecorationLine: 'line-through',
+    color: '#ccc',
+  },
+  goalFailedLabel: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#ff6b6b',
+    letterSpacing: 2,
+  },
+  goalAmountOver: {
+    color: '#ff6b6b',
+    fontWeight: '900',
   },
   goalHeader: {
     flexDirection: 'row',
@@ -1100,5 +1366,215 @@ const styles = StyleSheet.create({
   },
   budgetProjectionWarning: {
     color: '#ff6b6b',
+  },
+
+  // Section header buttons row
+  sectionHeaderButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  demoButton: {
+    backgroundColor: '#9b59b6',
+    borderWidth: 2,
+    borderColor: '#000',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
+  },
+  demoButtonText: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#fff',
+    letterSpacing: 1,
+  },
+
+  // Demo Modal
+  demoOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  demoModalContainer: {
+    backgroundColor: '#fff6f3',
+    borderWidth: 4,
+    borderColor: '#000',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  demoModalHeader: {
+    padding: 20,
+    borderBottomWidth: 3,
+    borderBottomColor: '#000',
+  },
+  demoModalTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 1,
+  },
+  demoModalDate: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#999',
+    letterSpacing: 2,
+    marginTop: 2,
+  },
+  demoCloseBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 4,
+  },
+  demoCloseBtnInner: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 3,
+    borderColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  demoCloseText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#000',
+  },
+  demoQuestCard: {
+    margin: 16,
+    backgroundColor: '#fff',
+    borderWidth: 3,
+    borderColor: '#4caf50',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
+  },
+  demoQuestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  demoQuestDetails: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  demoQuestTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 1,
+  },
+  demoQuestXp: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#9b59b6',
+  },
+  demoQuestSubtitle: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#666',
+    lineHeight: 16,
+    marginBottom: 12,
+  },
+  demoVerifiedBadge: {
+    backgroundColor: '#e8f5e9',
+    borderWidth: 2,
+    borderColor: '#4caf50',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignSelf: 'flex-start',
+  },
+  demoVerifiedText: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#4caf50',
+    letterSpacing: 1,
+  },
+  demoRewardSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    alignItems: 'center',
+  },
+  demoRewardLabel: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#999',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  demoRewardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  demoRewardEmoji: {
+    fontSize: 28,
+  },
+  demoRewardName: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#000',
+  },
+  demoRewardHint: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#999',
+    textAlign: 'center',
+  },
+  demoClaimButton: {
+    margin: 16,
+    marginTop: 0,
+  },
+  demoClaimGradient: {
+    borderRadius: 30,
+    borderWidth: 3,
+    borderColor: '#000',
+    paddingVertical: 14,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
+  },
+  demoClaimText: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#fff',
+    letterSpacing: 2,
   },
 });

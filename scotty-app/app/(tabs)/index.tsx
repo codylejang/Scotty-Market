@@ -1,12 +1,26 @@
-import { useState, useCallback, useEffect } from 'react';
-import { useNavigation } from 'expo-router';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useNavigation, useFocusEffect } from 'expo-router';
 import ScottyHomeScreen from '@/components/ScottyHomeScreen';
+import { useApp } from '@/context/AppContext';
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { Colors, Shadows } from '@/constants/Theme';
 
 export default function HomeScreen() {
   const [showQuestsModal, setShowQuestsModal] = useState(false);
   const navigation = useNavigation();
+  const { cycleInsight } = useApp();
+  const isFirstFocus = useRef(true);
+
+  // Cycle insight blurb each time this tab gains focus (skip first mount)
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstFocus.current) {
+        isFirstFocus.current = false;
+        return;
+      }
+      cycleInsight();
+    }, [cycleInsight])
+  );
 
   useEffect(() => {
     navigation.setOptions({
@@ -16,7 +30,7 @@ export default function HomeScreen() {
           onPress={() => setShowQuestsModal(true)}
           activeOpacity={0.7}
         >
-          <Text style={styles.badgeText}>Quests</Text>
+          <Text style={styles.badgeText}>Scotty's Quests</Text>
         </TouchableOpacity>
       ),
     });

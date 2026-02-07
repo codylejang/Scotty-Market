@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -12,7 +12,6 @@ import { useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useApp } from '@/context/AppContext';
-import { useCallback } from 'react';
 import TransactionList from '@/components/TransactionList';
 import SpendingChart from '@/components/SpendingChart';
 import HealthTab from '@/components/HealthTab';

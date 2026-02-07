@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import {
   Transaction,
   Achievement,
@@ -120,6 +120,7 @@ interface AppState {
   scottyState: ScottyState;
   healthMetrics: HealthMetrics;
   dailyInsight: DailyInsight | null;
+  allInsights: DailyInsight[];
 
   // Financial data
   budgets: BudgetItem[];
@@ -161,6 +162,7 @@ interface AppState {
   dismissAchievement: (id: string) => void;
   sendChatMessage: (message: string) => Promise<void>;
   refreshInsight: () => Promise<void>;
+  cycleInsight: () => void;
   refreshGoals: () => Promise<void>;
   refreshQuests: () => Promise<void>;
   refreshBudgets: () => Promise<void>;
@@ -242,6 +244,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [scottyState, setScottyState] = useState<ScottyState>(defaultScottyState);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics>(defaultHealthMetrics);
   const [dailyInsight, setDailyInsight] = useState<DailyInsight | null>(null);
+  const [allInsights, setAllInsights] = useState<DailyInsight[]>([]);
+  const insightIndexRef = useRef(0);
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
@@ -399,6 +403,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setDailySpend(todaySpend);
       }
 
+      // Always use today's actual spend from transactions (not averages)
+      setDailySpend(todaySpend);
+
       setAccounts(accountData.accounts);
       setTotalBalance(accountData.totalBalance);
       if (projectionsData) setBudgetProjections(projectionsData);
@@ -455,7 +462,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const payload = await withTimeout(fetchDailyPayload(), 10000);
       if (payload.insights.length > 0) {
-        setDailyInsight(mapInsightToFrontend(payload.insights[0]));
+        const mapped = payload.insights.map(mapInsightToFrontend);
+        setAllInsights(mapped);
+        insightIndexRef.current = 0;
+        setDailyInsight(mapped[0]);
       }
     } catch {
       // Daily payload timed out (LLM generating) — keep mock insight, that's fine
@@ -648,9 +658,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const payload = await fetchDailyPayload();
         if (payload.insights.length > 0) {
-          // Pick a random insight from the list for variety
-          const idx = Math.floor(Math.random() * payload.insights.length);
-          setDailyInsight(mapInsightToFrontend(payload.insights[idx]));
+          const mapped = payload.insights.map(mapInsightToFrontend);
+          setAllInsights(mapped);
+          insightIndexRef.current = 0;
+          setDailyInsight(mapped[0]);
           return;
         }
       } catch {
@@ -659,8 +670,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const insight = await generateDailyInsight(transactions);
+    setAllInsights([insight]);
+    insightIndexRef.current = 0;
     setDailyInsight(insight);
   };
+
+  // Cycle to the next insight blurb (called when returning to home tab)
+  const insightsRef = useRef<DailyInsight[]>([]);
+  insightsRef.current = allInsights;
+  const cycleInsight = useCallback(() => {
+    const insights = insightsRef.current;
+    if (insights.length <= 1) return;
+    insightIndexRef.current = (insightIndexRef.current + 1) % insights.length;
+    setDailyInsight(insights[insightIndexRef.current]);
+  }, []);
 
   const loadChatActions = async () => {
     if (backendConnected) {
@@ -711,6 +734,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         scottyState,
         healthMetrics,
         dailyInsight,
+        allInsights,
         budgets,
         budgetProjections,
         accounts,
@@ -731,6 +755,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dismissAchievement,
         sendChatMessage,
         refreshInsight,
+        cycleInsight,
         refreshGoals,
         refreshQuests,
         refreshBudgets,

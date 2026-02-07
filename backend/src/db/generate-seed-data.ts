@@ -1,6 +1,6 @@
 /**
  * One-time script to generate AI-powered seed transaction data.
- * Writes output to ../data/nessie-seed-transactions.json.
+ * Writes output to ../data/seed-transactions.json.
  *
  * Usage:
  *   npx tsx src/db/generate-seed-data.ts
@@ -12,7 +12,7 @@ import { ClaudeLLMProvider } from '../agents/runner';
 import path from 'path';
 import fs from 'fs';
 
-const OUTPUT_PATH = path.join(__dirname, '../data/nessie-seed-transactions.json');
+const OUTPUT_PATH = path.join(__dirname, '../data/seed-transactions.json');
 
 const AI_SEED_PROMPT = `Generate realistic transaction data for a college student / young professional user of a budgeting app.
 
