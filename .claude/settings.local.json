@@ -15,7 +15,8 @@
       "Bash(sqlite3:*)",
       "Bash(curl:*)",
       "Bash(python3:*)",
-      "Bash(npm run seed:*)"
+      "Bash(npm run seed:*)",
+      "Bash(cat:*)"
     ]
   }
 }

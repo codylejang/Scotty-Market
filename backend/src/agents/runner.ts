@@ -6,14 +6,14 @@ import { DailyDigestOutput, ChatResponseOutput, TriggerType, ChatSuggestedAction
 import { Adapters } from '../adapters';
 import { buildDualSummary } from '../services/financial-summary';
 import { searchTransactions, detectAnomalies } from '../services/retrieval';
-import { createBudget, listBudgets } from '../services/budget';
+import { listBudgets, upsertBudget } from '../services/budget';
 
 export type JobType = 'generate_daily_payload' | 'generate_chat_response' | 'propose_subscription_actions';
 
 export interface BudgetSuggestion {
   category: string;
   limit_amount: number;
-  frequency: 'Day' | 'Week' | 'Month';
+  frequency: 'Day' | 'Month' | 'Year';
   reasoning: string;
 }
 
@@ -811,12 +811,9 @@ Respond as Scotty, a friendly Scottish Terrier financial buddy. Keep it concise 
     if (options.apply) {
       for (const suggestion of suggestions) {
         try {
-          createBudget(userId, suggestion.category, suggestion.limit_amount, suggestion.frequency);
+          upsertBudget(userId, suggestion.category, suggestion.limit_amount, suggestion.frequency);
         } catch (err: any) {
-          // UNIQUE constraint = budget already exists, skip
-          if (!err.message?.includes('UNIQUE constraint')) {
-            console.warn(`[AgentRunner] Failed to create budget for ${suggestion.category}:`, err.message);
-          }
+          console.warn(`[AgentRunner] Failed to create budget for ${suggestion.category}:`, err.message);
         }
       }
     }

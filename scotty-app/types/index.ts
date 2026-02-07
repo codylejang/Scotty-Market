@@ -110,9 +110,12 @@ export interface FoodItem {
 export interface BudgetItem {
   id: string;
   category: string;
-  frequency: 'Day' | 'Week' | 'Month';
+  frequency: 'Day' | 'Month' | 'Year';
   limitAmount: number;
   derivedDailyLimit: number;
+  adaptiveEnabled: boolean;
+  adaptiveMaxAdjustPct: number;
+  lastAutoAdjustedAt?: string | null;
   spent: number; // computed client-side from transactions
 }
 

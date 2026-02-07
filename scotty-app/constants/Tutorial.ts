@@ -95,7 +95,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     screen: 'feed',
     tab: 'health',
     title: 'Goals and budgets',
-    body: 'Budgets are guardrails that fund your goals. Set a budget so Scotty can plan your savings.',
+    body: 'Budgets are guardrails that fund your goals. Modify your budget so Scotty can plan your savings.',
     primaryLabel: 'Finish',
     isFinal: true,
   },

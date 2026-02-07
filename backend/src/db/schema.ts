@@ -269,4 +269,41 @@ export const MIGRATIONS = [
       ALTER TABLE quest ADD COLUMN description TEXT NOT NULL DEFAULT '';
     `,
   },
+  {
+    version: 7,
+    name: 'budget_yearly_and_adaptive_mode',
+    sql: `
+      ALTER TABLE budget ADD COLUMN adaptive_enabled INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE budget ADD COLUMN adaptive_max_adjust_pct REAL NOT NULL DEFAULT 10;
+      ALTER TABLE budget ADD COLUMN last_auto_adjusted_at TEXT;
+
+      -- Migrate legacy weekly budgets to monthly while preserving approximate daily budget.
+      UPDATE budget
+      SET amount = ROUND(amount * 30.0 / 7.0, 2),
+          frequency = 'Month',
+          period = 'monthly'
+      WHERE frequency = 'Week';
+
+      -- Normalize period text from frequency.
+      UPDATE budget SET period = 'daily' WHERE frequency = 'Day';
+      UPDATE budget SET period = 'monthly' WHERE frequency = 'Month';
+      UPDATE budget SET period = 'yearly' WHERE frequency = 'Year';
+
+      -- Recompute derived daily limits for all budget frequencies.
+      UPDATE budget
+      SET derived_daily_limit = CASE
+        WHEN frequency = 'Day' THEN ROUND(amount, 2)
+        WHEN frequency = 'Year' THEN ROUND(amount / 365.0, 2)
+        ELSE ROUND(amount / 30.0, 2)
+      END;
+    `,
+  },
+  {
+    version: 8,
+    name: 'quest_goal_link',
+    sql: `
+      ALTER TABLE quest ADD COLUMN goal_id TEXT REFERENCES goal(id);
+      CREATE INDEX IF NOT EXISTS idx_quest_goal ON quest(goal_id);
+    `,
+  },
 ];

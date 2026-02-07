@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import { TransactionCategory, Transaction, DailyInsight, Quest, AccountInfo } from '../types';
+import { TransactionCategory, Transaction, DailyInsight, Quest, AccountInfo, GoalData } from '../types';
 
 interface SpendingChartProps {
   spending: Partial<Record<TransactionCategory, number>>;
@@ -13,6 +13,7 @@ interface SpendingChartProps {
   totalBalance?: number;
   spendingTrend?: { months: string[]; totals: number[] };
   quests?: Quest[];
+  goals?: GoalData[];
 }
 
 const CATEGORY_COLORS: Record<TransactionCategory, string> = {
@@ -52,6 +53,7 @@ export function SpendingChart({
   totalBalance: propTotalBalance,
   spendingTrend: propTrend,
   quests = [],
+  goals = [],
 }: SpendingChartProps) {
   const entries = Object.entries(spending)
     .filter(([, amount]) => amount && amount > 0)
@@ -257,6 +259,43 @@ export function SpendingChart({
       </View>
 
       {(() => {
+        const activeGoal = goals.find(g => g.status === 'ACTIVE');
+        if (activeGoal) {
+          const target = Math.max(1, activeGoal.targetAmount);
+          const saved = Math.max(0, activeGoal.savedSoFar);
+          const pct = Math.min(100, Math.round((saved / target) * 100));
+          const daysLeft = activeGoal.deadline
+            ? Math.max(0, Math.ceil((new Date(activeGoal.deadline).getTime() - Date.now()) / 86400000))
+            : null;
+          const deadlineLabel = daysLeft === null
+            ? 'NO DEADLINE'
+            : daysLeft === 0
+              ? 'DEADLINE TODAY'
+              : `${daysLeft} DAYS LEFT`;
+
+          return (
+            <View style={styles.goalCard}>
+              <View style={styles.goalHeader}>
+                <Text style={styles.goalTitle}>{activeGoal.name.toUpperCase()}</Text>
+                <View style={styles.goalStar}>
+                  <Text>🎯</Text>
+                </View>
+              </View>
+              <Text style={styles.goalAmount}>
+                <Text style={styles.goalAmountBold}>${saved.toFixed(0)}</Text> / ${target.toFixed(0)}
+              </Text>
+              <Text style={styles.goalExpected}>{deadlineLabel}</Text>
+              <View style={styles.goalProgressBar}>
+                <View style={[styles.goalProgressFill, { width: `${pct}%` }]} />
+                {pct < 100 && <View style={styles.goalProgressDashed} />}
+              </View>
+              <Text style={styles.goalEncouragement}>
+                {pct >= 100 ? 'GOAL REACHED! GREAT WORK! 🐾' : `${pct}% OF THE WAY THERE, KEEP GOING! 🐾`}
+              </Text>
+            </View>
+          );
+        }
+
         const activeQuest = quests.find(q => q.goal > 0);
         if (activeQuest) {
           const pct = Math.min(100, Math.round((activeQuest.progress / activeQuest.goal) * 100));
@@ -614,14 +653,14 @@ const styles = StyleSheet.create({
     width: 28,
     borderRadius: 6,
     borderWidth: 2,
+    borderColor: '#000',
+    minHeight: 12,
+  },
   trendBarPredicted: {
     backgroundColor: 'transparent',
     borderWidth: 2,
     borderColor: '#9b59b6',
     borderStyle: 'dashed',
-  },
-    borderColor: '#000',
-    minHeight: 12,
   },
   trendLabel: {
     fontFamily: FONT,

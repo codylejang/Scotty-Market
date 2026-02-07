@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -11,60 +11,150 @@ import {
   Switch,
   KeyboardAvoidingView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { createBudget } from '../services/api';
+import { useApp } from '../context/AppContext';
+import { createBudget, updateBudget } from '../services/api';
+import { BudgetItem } from '../types';
 
 interface BudgetBuilderModalProps {
   visible: boolean;
   onClose: () => void;
 }
 
-type BudgetCategory = 'groceries' | 'dining' | 'travel' | 'shopping' | 'fun' | 'self_care' | 'miscellaneous';
+type BudgetFrequency = BudgetItem['frequency'];
 
-const CATEGORIES: { key: BudgetCategory; label: string; icon: string }[] = [
-  { key: 'groceries', label: 'GROCERIES', icon: '🥬' },
-  { key: 'dining', label: 'DINING', icon: '🍴' },
-  { key: 'travel', label: 'TRAVEL', icon: '🚌' },
-  { key: 'shopping', label: 'SHOPPING', icon: '🛍️' },
-  { key: 'fun', label: 'FUN', icon: '🎬' },
-  { key: 'self_care', label: 'SELF CARE', icon: '🌿' },
-  { key: 'miscellaneous', label: 'MISCELLANEOUS', icon: '🐾' },
+type BudgetDraft = {
+  limit: string;
+  frequency: BudgetFrequency;
+  adaptiveEnabled: boolean;
+};
+
+const CATEGORIES: { category: string; label: string; icon: string }[] = [
+  { category: 'Food & Drink', label: 'FOOD & DRINK', icon: '🍴' },
+  { category: 'Groceries', label: 'GROCERIES', icon: '🥬' },
+  { category: 'Transportation', label: 'TRANSPORT', icon: '🚌' },
+  { category: 'Entertainment', label: 'FUN', icon: '🎬' },
+  { category: 'Shopping', label: 'SHOPPING', icon: '🛍️' },
+  { category: 'Health', label: 'SELF CARE', icon: '🌿' },
+  { category: 'Subscription', label: 'SUBSCRIPTIONS', icon: '💳' },
 ];
 
+const FREQUENCIES: Array<{ label: string; value: BudgetFrequency }> = [
+  { label: 'DAILY', value: 'Day' },
+  { label: 'MONTHLY', value: 'Month' },
+  { label: 'YEARLY', value: 'Year' },
+];
+
+function formatFrequencyLabel(frequency: BudgetFrequency): string {
+  if (frequency === 'Day') return 'Daily';
+  if (frequency === 'Year') return 'Yearly';
+  return 'Monthly';
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function buildDrafts(existingBudgets: BudgetItem[]): Record<string, BudgetDraft> {
+  const map = new Map(existingBudgets.map((b) => [b.category, b]));
+  const drafts: Record<string, BudgetDraft> = {};
+
+  for (const item of CATEGORIES) {
+    const budget = map.get(item.category);
+    drafts[item.category] = {
+      limit: budget ? String(roundMoney(budget.limitAmount)) : '',
+      frequency: budget?.frequency || 'Month',
+      adaptiveEnabled: budget?.adaptiveEnabled ?? true,
+    };
+  }
+
+  return drafts;
+}
+
 export default function BudgetBuilderModal({ visible, onClose }: BudgetBuilderModalProps) {
-  const [selectedCategory, setSelectedCategory] = useState<BudgetCategory>('groceries');
-  const [monthlyLimit, setMonthlyLimit] = useState('400');
-  const [adaptiveMode, setAdaptiveMode] = useState(true);
-
+  const { budgets, refreshBudgets } = useApp();
+  const [drafts, setDrafts] = useState<Record<string, BudgetDraft>>({});
   const [submitting, setSubmitting] = useState(false);
-  const suggestedBudget = 400;
 
-  const CATEGORY_TO_BACKEND: Record<BudgetCategory, string> = {
-    groceries: 'Groceries',
-    dining: 'Food & Drink',
-    travel: 'Transportation',
-    shopping: 'Shopping',
-    fun: 'Entertainment',
-    self_care: 'Health',
-    miscellaneous: 'Subscription',
+  const existingByCategory = useMemo(
+    () => new Map(budgets.map((budget) => [budget.category, budget])),
+    [budgets],
+  );
+
+  useEffect(() => {
+    if (!visible) return;
+    setDrafts(buildDrafts(budgets));
+  }, [visible, budgets]);
+
+  const setDraft = (category: string, patch: Partial<BudgetDraft>) => {
+    setDrafts((prev) => ({
+      ...prev,
+      [category]: {
+        ...prev[category],
+        ...patch,
+      },
+    }));
   };
 
   const handleSubmit = async () => {
-    const amount = parseFloat(monthlyLimit);
-    if (!amount || amount <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a valid budget amount.');
+    if (submitting) return;
+
+    const mutations: Promise<any>[] = [];
+
+    for (const category of CATEGORIES) {
+      const draft = drafts[category.category];
+      if (!draft) continue;
+
+      const trimmed = draft.limit.trim();
+      if (!trimmed) continue;
+
+      const amount = parseFloat(trimmed);
+      if (!amount || amount <= 0) {
+        Alert.alert('Invalid amount', `Please enter a valid budget for ${category.label}.`);
+        return;
+      }
+
+      const normalizedAmount = roundMoney(amount);
+      const existing = existingByCategory.get(category.category);
+
+      if (existing) {
+        const changed =
+          Math.abs(existing.limitAmount - normalizedAmount) > 0.009 ||
+          existing.frequency !== draft.frequency ||
+          (existing.adaptiveEnabled ?? true) !== draft.adaptiveEnabled;
+
+        if (changed) {
+          mutations.push(updateBudget(existing.id, {
+            limitAmount: normalizedAmount,
+            frequency: draft.frequency,
+            adaptiveEnabled: draft.adaptiveEnabled,
+            adaptiveMaxAdjustPct: existing.adaptiveMaxAdjustPct || 10,
+          }));
+        }
+      } else {
+        mutations.push(createBudget(
+          category.category,
+          normalizedAmount,
+          draft.frequency,
+          draft.adaptiveEnabled,
+          10,
+        ));
+      }
+    }
+
+    if (mutations.length === 0) {
+      onClose();
       return;
     }
 
     setSubmitting(true);
     try {
-      const backendCategory = CATEGORY_TO_BACKEND[selectedCategory] || 'Other';
-      await createBudget(backendCategory, amount, 'Month');
+      await Promise.all(mutations);
+      await refreshBudgets();
       onClose();
     } catch (err: any) {
-      // If backend fails, still close (graceful degradation)
-      console.warn('Budget creation failed:', err.message);
-      onClose();
+      Alert.alert('Error', err?.message || 'Failed to save budgets.');
     } finally {
       setSubmitting(false);
     }
@@ -75,100 +165,89 @@ export default function BudgetBuilderModal({ visible, onClose }: BudgetBuilderMo
       <View style={styles.overlay}>
         <KeyboardAvoidingView behavior="padding" style={styles.keyboardView}>
           <View style={styles.modal}>
-            {/* Close Button */}
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
               <Text style={styles.closeText}>✕</Text>
             </TouchableOpacity>
 
-            {/* Header */}
             <View style={styles.header}>
-              <View>
-                <Text style={styles.title}>Budget Builder</Text>
-                <Text style={styles.subtitle}>LET'S MAKE A PLAN!</Text>
-              </View>
+              <Text style={styles.title}>Budget Builder</Text>
+              <Text style={styles.subtitle}>MODIFY YOUR LIMITS</Text>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Category Picker */}
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>🏷️ PICK A CATEGORY</Text>
-                <View style={styles.categoryGrid}>
-                  {CATEGORIES.map((cat) => (
-                    <TouchableOpacity
-                      key={cat.key}
-                      style={[
-                        styles.categoryChip,
-                        selectedCategory === cat.key && styles.categoryChipActive,
-                      ]}
-                      onPress={() => setSelectedCategory(cat.key)}
-                    >
-                      <Text style={styles.categoryIcon}>{cat.icon}</Text>
-                      <Text
-                        style={[
-                          styles.categoryLabel,
-                          selectedCategory === cat.key && styles.categoryLabelActive,
-                        ]}
-                      >
-                        {cat.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
+              {CATEGORIES.map((item) => {
+                const draft = drafts[item.category];
+                if (!draft) return null;
 
-              {/* Monthly Limit */}
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>💰 MONTHLY LIMIT</Text>
-                <View style={styles.inputWrapper}>
-                  <Text style={styles.inputPrefix}>$</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={monthlyLimit}
-                    onChangeText={setMonthlyLimit}
-                    keyboardType="numeric"
-                  />
-                  <View style={styles.inputIconBadge}>
-                    <Text style={styles.inputIconText}>💳</Text>
+                const existing = existingByCategory.get(item.category);
+                const existingText = existing
+                  ? `Current: $${roundMoney(existing.limitAmount).toFixed(2)} / ${formatFrequencyLabel(existing.frequency)}`
+                  : 'Current: Not set';
+
+                return (
+                  <View key={item.category} style={styles.categoryCard}>
+                    <View style={styles.categoryHeader}>
+                      <Text style={styles.categoryTitle}>{item.icon} {item.label}</Text>
+                      <Text style={styles.existingText}>{existingText}</Text>
+                    </View>
+
+                    <View style={styles.inputRow}>
+                      <Text style={styles.inputPrefix}>$</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={draft.limit}
+                        onChangeText={(text) => setDraft(item.category, { limit: text })}
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                        placeholderTextColor="#aaa"
+                      />
+                    </View>
+
+                    <View style={styles.periodRow}>
+                      {FREQUENCIES.map((freq) => (
+                        <TouchableOpacity
+                          key={`${item.category}-${freq.value}`}
+                          style={[
+                            styles.periodChip,
+                            draft.frequency === freq.value && styles.periodChipActive,
+                          ]}
+                          onPress={() => setDraft(item.category, { frequency: freq.value })}
+                        >
+                          <Text
+                            style={[
+                              styles.periodText,
+                              draft.frequency === freq.value && styles.periodTextActive,
+                            ]}
+                          >
+                            {freq.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <View style={styles.adaptiveRow}>
+                      <Text style={styles.adaptiveText}>Adaptive mode</Text>
+                      <Switch
+                        value={draft.adaptiveEnabled}
+                        onValueChange={(value) => setDraft(item.category, { adaptiveEnabled: value })}
+                        trackColor={{ false: '#ddd', true: '#81d4fa' }}
+                        thumbColor="#fff"
+                      />
+                    </View>
                   </View>
-                </View>
-              </View>
+                );
+              })}
 
-              {/* Suggestion Card */}
-              <View style={styles.suggestionCard}>
-                <Text style={styles.suggestionText}>
-                  Your 3-month average is $420. Suggested budget:{' '}
-                  <Text style={styles.suggestionHighlight}>${suggestedBudget}.</Text>
-                </Text>
-                <TouchableOpacity
-                  style={styles.suggestButton}
-                  onPress={() => setMonthlyLimit(String(suggestedBudget))}
-                >
-                  <Text style={styles.suggestButtonText}>SUGGEST ${suggestedBudget}</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Adaptive Mode */}
-              <View style={styles.field}>
-                <View style={styles.adaptiveHeader}>
-                  <Text style={styles.fieldLabel}>⚙️ ADAPTIVE MODE</Text>
-                  <Text style={styles.adaptiveFlex}>ALLOW +/- 10% FLEX</Text>
-                </View>
-                <View style={styles.adaptiveCard}>
-                  <Text style={styles.adaptiveText}>
-                    Auto-adjust limit based on spending?
-                  </Text>
-                  <Switch
-                    value={adaptiveMode}
-                    onValueChange={setAdaptiveMode}
-                    trackColor={{ false: '#ddd', true: '#81d4fa' }}
-                    thumbColor={adaptiveMode ? '#fff' : '#fff'}
-                  />
-                </View>
-              </View>
-
-              {/* Submit Button */}
-              <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-                <Text style={styles.submitText}>SET BUDGET 🐾</Text>
+              <TouchableOpacity
+                style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+                onPress={handleSubmit}
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitText}>SAVE BUDGET CHANGES</Text>
+                )}
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -196,10 +275,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#000',
     borderBottomWidth: 0,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 40,
-    maxHeight: '85%',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 30,
+    maxHeight: '88%',
   },
   closeButton: {
     position: 'absolute',
@@ -221,13 +300,8 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#fff',
   },
-
-  // Header
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 18,
   },
   title: {
     fontFamily: FONT,
@@ -239,206 +313,116 @@ const styles = StyleSheet.create({
     fontFamily: FONT,
     fontSize: 10,
     fontWeight: '700',
-    color: '#999',
-    letterSpacing: 2,
-  },
-  avatarBadge: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#fff9c4',
-    borderWidth: 2,
-    borderColor: '#000',
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 2,
-  },
-  avatarEmoji: { fontSize: 24 },
-
-  // Fields
-  field: {
-    marginBottom: 18,
-  },
-  fieldLabel: {
-    fontFamily: FONT,
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#ff6b6b',
+    color: '#777',
     letterSpacing: 1,
-    marginBottom: 8,
   },
-
-  // Category Grid
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  categoryChip: {
-    width: '22%',
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#000',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 2,
-  },
-  categoryChipActive: {
-    backgroundColor: '#fff9c4',
-  },
-  categoryIcon: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  categoryLabel: {
-    fontFamily: FONT,
-    fontSize: 7,
-    fontWeight: '900',
-    color: '#000',
-    letterSpacing: 0.5,
-  },
-  categoryLabelActive: {
-    color: '#000',
-  },
-
-  // Input
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#000',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  inputPrefix: {
-    fontFamily: FONT,
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#000',
-    marginRight: 4,
-  },
-  input: {
-    flex: 1,
-    fontFamily: FONT,
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#000',
-    padding: 0,
-  },
-  inputIconBadge: {
-    width: 32,
-    height: 32,
-    backgroundColor: '#ffece6',
-    borderWidth: 1,
-    borderColor: '#000',
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inputIconText: { fontSize: 16 },
-
-  // Suggestion
-  suggestionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  categoryCard: {
     backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: '#000',
     borderRadius: 12,
     padding: 12,
-    marginBottom: 18,
-    gap: 10,
+    marginBottom: 12,
   },
-  suggestionText: {
-    flex: 1,
+  categoryHeader: {
+    marginBottom: 10,
+  },
+  categoryTitle: {
+    fontFamily: FONT,
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 0.5,
+  },
+  existingText: {
     fontFamily: FONT,
     fontSize: 10,
     fontWeight: '700',
-    color: '#000',
-    lineHeight: 16,
+    color: '#666',
+    marginTop: 2,
   },
-  suggestionHighlight: {
-    color: '#ff6b6b',
-    fontWeight: '900',
-  },
-  suggestButton: {
-    backgroundColor: '#c8e6c9',
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 2,
     borderColor: '#000',
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 8,
+    marginBottom: 10,
   },
-  suggestButtonText: {
+  inputPrefix: {
     fontFamily: FONT,
-    fontSize: 9,
+    fontSize: 16,
     fontWeight: '900',
+    marginRight: 4,
     color: '#000',
-    letterSpacing: 0.5,
   },
-
-  // Adaptive
-  adaptiveHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  adaptiveFlex: {
+  input: {
+    flex: 1,
     fontFamily: FONT,
-    fontSize: 8,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#999',
-    letterSpacing: 0.5,
+    color: '#000',
+    padding: 0,
   },
-  adaptiveCard: {
+  periodRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 10,
+  },
+  periodChip: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: '#000',
+    borderRadius: 10,
+    paddingVertical: 8,
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#000',
-    borderRadius: 12,
-    padding: 14,
+  },
+  periodChipActive: {
+    backgroundColor: '#fff9c4',
+  },
+  periodText: {
+    fontFamily: FONT,
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 0.5,
+  },
+  periodTextActive: {
+    color: '#000',
+  },
+  adaptiveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   adaptiveText: {
     fontFamily: FONT,
     fontSize: 11,
     fontWeight: '700',
     color: '#000',
-    flex: 1,
-    marginRight: 10,
   },
-
-  // Submit
   submitButton: {
-    backgroundColor: '#000',
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 4,
+    backgroundColor: '#ff6b6b',
+    borderWidth: 2,
+    borderColor: '#000',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    marginBottom: 8,
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
   },
   submitText: {
     fontFamily: FONT,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '900',
     color: '#fff',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
 });

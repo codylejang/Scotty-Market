@@ -68,11 +68,21 @@ const formatCompact = (value: number): string => {
   return `${sign}$${abs.toFixed(2)}`;
 };
 
+const getFrequencyDays = (frequency: BudgetItem['frequency']) => {
+  if (frequency === 'Day') return 1;
+  if (frequency === 'Year') {
+    const year = new Date().getFullYear();
+    const start = new Date(year, 0, 1);
+    const end = new Date(year + 1, 0, 1);
+    return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+};
+
 const getDailyLimit = (budget: BudgetItem) => {
   if (budget.derivedDailyLimit > 0) return budget.derivedDailyLimit;
-  if (budget.frequency === 'Day') return budget.limitAmount;
-  if (budget.frequency === 'Week') return budget.limitAmount / 7;
-  return budget.limitAmount / 30;
+  return budget.limitAmount / getFrequencyDays(budget.frequency);
 };
 
 function QuestCard({ quest, index }: { quest: Quest; index: number }) {
@@ -317,7 +327,7 @@ export default function ScottyHomeScreen({
 
     budgets.forEach((budget, index) => {
       const dailyLimit = getDailyLimit(budget);
-      const budgetPeriodDays = budget.frequency === 'Day' ? 1 : budget.frequency === 'Week' ? 7 : 30;
+      const budgetPeriodDays = getFrequencyDays(budget.frequency);
       const dailySpendRate = budgetPeriodDays > 0 ? budget.spent / budgetPeriodDays : 0;
 
       const limits: Record<BudgetTab, number> = {

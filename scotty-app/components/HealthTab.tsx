@@ -229,7 +229,7 @@ export default function HealthTab({ healthMetrics, onStartGoal, onCreateBudget, 
         <View style={styles.ctaContent}>
           <Text style={styles.ctaIcon}>🐾</Text>
           <View>
-            <Text style={styles.ctaTitleLight}>CREATE BUDGET</Text>
+            <Text style={styles.ctaTitleLight}>MODIFY BUDGET</Text>
             <Text style={styles.ctaSubLight}>Set the human rules</Text>
           </View>
         </View>

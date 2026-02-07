@@ -25,7 +25,7 @@ export default function GoalWorkshopModal({ visible, onClose, onGoalCreated }: G
   const [goalName, setGoalName] = useState('');
   const [targetDate, setTargetDate] = useState('');
   const [savedSoFar, setSavedSoFar] = useState('');
-  const [budgetPercent, setBudgetPercent] = useState(10);
+  const [budgetPercent, setBudgetPercent] = useState(30);
   const [totalPrice, setTotalPrice] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -137,7 +137,7 @@ export default function GoalWorkshopModal({ visible, onClose, onGoalCreated }: G
 
               {/* Budget Percent */}
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>% HOW MUCH ARE YOU WILLING TO BUDGET?</Text>
+                <Text style={styles.fieldLabel}>% HOW MUCH WOULD YOU LIKE TO PUT INTO SAVINGS?</Text>
                 <View style={styles.percentRow}>
                   <View style={styles.percentBadge}>
                     <Text style={styles.percentValue}>{budgetPercent}</Text>

@@ -19,6 +19,7 @@ import HealthTab from '@/components/HealthTab';
 import GoalWorkshopModal from '@/components/GoalWorkshopModal';
 import BudgetBuilderModal from '@/components/BudgetBuilderModal';
 import TutorialModal from '@/components/TutorialModal';
+import Toast from '@/components/Toast';
 import { getSpendingByCategory, getTotalSpending } from '@/services/transactionMetrics';
 import { TUTORIAL_STEPS } from '@/constants/Tutorial';
 
@@ -42,8 +43,11 @@ export default function FeedScreen() {
     totalBalance,
     spendingTrend,
     quests,
+    goals,
     upcomingBills,
     refreshGoals,
+    pendingGoalNotification,
+    clearGoalNotification,
     tutorial,
     advanceTutorial,
     skipTutorial,
@@ -104,6 +108,12 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.container}>
+      <Toast
+        message={pendingGoalNotification || ''}
+        visible={!!pendingGoalNotification}
+        onDismiss={clearGoalNotification}
+      />
+
       {/* Header */}
       <View
         style={[
@@ -175,6 +185,7 @@ export default function FeedScreen() {
             totalBalance={totalBalance}
             spendingTrend={spendingTrend}
             quests={quests}
+            goals={goals}
           />
         </ScrollView>
 
@@ -226,7 +237,7 @@ export default function FeedScreen() {
                 style={styles.tutorialActionButton}
                 onPress={() => { completeTutorial(); setShowBudgetModal(true); }}
               >
-                <Text style={styles.tutorialActionText}>Create a budget</Text>
+                <Text style={styles.tutorialActionText}>Modify budget</Text>
               </TouchableOpacity>
             </View>
           ) : null
