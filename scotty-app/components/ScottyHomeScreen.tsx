@@ -103,7 +103,7 @@ export default function ScottyHomeScreen({
     setFoodCounts({ coffee, food, pets });
   }, [creditShare]);
 
-  // Quests data: prefer context (backend) quests, fallback to mock
+  // Quests data: prefer context (backend) quests, fallback to empty
   const [quests, setQuests] = useState<Quest[]>([]);
   React.useEffect(() => {
     if (contextQuests.length > 0) {
@@ -250,22 +250,32 @@ export default function ScottyHomeScreen({
 
     budgets.forEach((budget, index) => {
       const dailyLimit = getDailyLimit(budget);
+      // budget.spent is computed over the budget's frequency period (typically 30 days for Monthly)
+      const budgetPeriodDays = budget.frequency === 'Day' ? 1 : budget.frequency === 'Week' ? 7 : 30;
+      const dailySpendRate = budgetPeriodDays > 0 ? budget.spent / budgetPeriodDays : 0;
+
       const limits: Record<BudgetTab, number> = {
         Daily: dailyLimit,
         Monthly: dailyLimit * 30,
         Yearly: dailyLimit * 365,
+      };
+      const spentByTab: Record<BudgetTab, number> = {
+        Daily: dailySpendRate,
+        Monthly: dailySpendRate * 30,
+        Yearly: dailySpendRate * 365,
       };
       const emoji = CATEGORY_EMOJI[budget.category] || '📊';
       const color = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
 
       (Object.keys(limits) as BudgetTab[]).forEach((tab) => {
         const limit = limits[tab];
-        const percent = limit > 0 ? Math.min(100, Math.round((budget.spent / limit) * 100)) : 0;
+        const spent = spentByTab[tab];
+        const percent = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
         byTab[tab].push({
           id: `${budget.id}-${tab}`,
           emoji,
           name: budget.category,
-          spent: budget.spent,
+          spent,
           limit,
           percent,
           projection: percent,
@@ -310,7 +320,7 @@ export default function ScottyHomeScreen({
             <Text style={styles.speechText}>
               {dailyInsight?.message
                 ? `"${dailyInsight.message}"`
-                : '"Save some kibble for later!"'}
+                : '"Woof! Loading your insights..."'}
             </Text>
             <View style={styles.speechTail} />
           </View>

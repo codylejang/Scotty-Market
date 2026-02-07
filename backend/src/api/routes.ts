@@ -1152,6 +1152,99 @@ export function createRouter(adapters: Adapters, runner: AgentRunner): Router {
     }
   });
 
+  // ─── POST /v1/goals ───
+  router.post('/v1/goals', async (req: Request, res: Response) => {
+    try {
+      const { user_id, name, target_amount, deadline, saved_so_far, budget_percent } = req.body;
+      if (!user_id || !name || !target_amount) {
+        return res.status(400).json({ error: 'user_id, name, and target_amount required' });
+      }
+      if (typeof target_amount !== 'number' || target_amount <= 0) {
+        return res.status(400).json({ error: 'target_amount must be a positive number' });
+      }
+
+      const db = getDb();
+      const id = uuid();
+      db.prepare(`
+        INSERT INTO goal (id, user_id, name, target_amount, saved_so_far, deadline, budget_percent)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, user_id, name, target_amount,
+        saved_so_far || 0,
+        deadline || null,
+        budget_percent || 10
+      );
+
+      const goal = db.prepare('SELECT * FROM goal WHERE id = ?').get(id);
+      res.status(201).json(goal);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /v1/goals ───
+  router.get('/v1/goals', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.user_id as string;
+      if (!userId) return res.status(400).json({ error: 'user_id required' });
+
+      const db = getDb();
+      const goals = db.prepare(
+        `SELECT * FROM goal WHERE user_id = ? ORDER BY created_at DESC`
+      ).all(userId);
+
+      res.json({ goals });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── GET /v1/goals/:id/progress ───
+  router.get('/v1/goals/:id/progress', async (req: Request, res: Response) => {
+    try {
+      const db = getDb();
+      const goal = db.prepare('SELECT * FROM goal WHERE id = ?').get(req.params.id) as any;
+      if (!goal) return res.status(404).json({ error: 'Goal not found' });
+
+      const remaining = Math.max(0, goal.target_amount - goal.saved_so_far);
+      let monthsLeft = 6;
+      if (goal.deadline) {
+        const daysLeft = Math.max(1, Math.ceil(
+          (new Date(goal.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        ));
+        monthsLeft = Math.max(1, daysLeft / 30);
+      }
+      const monthlyPace = remaining / monthsLeft;
+
+      res.json({
+        goal,
+        progress: {
+          target_amount: goal.target_amount,
+          current_amount: goal.saved_so_far,
+          remaining,
+          monthly_pace_needed: Math.round(monthlyPace * 100) / 100,
+          percent_complete: Math.round((goal.saved_so_far / goal.target_amount) * 100),
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── POST /v1/budgets/generate ───
+  router.post('/v1/budgets/generate', async (req: Request, res: Response) => {
+    try {
+      const userId = req.body.user_id as string;
+      if (!userId) return res.status(400).json({ error: 'user_id required' });
+      const apply = req.body.apply === true;
+
+      const suggestions = await runner.generateBudgetSuggestions(userId, { apply });
+      res.json({ budgets: suggestions, applied: apply });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ─── POST /v1/admin/daily-digest (trigger digest manually) ───
   router.post('/v1/admin/daily-digest', async (req: Request, res: Response) => {
     try {

@@ -570,6 +570,60 @@ export async function fetchUpcomingBills(): Promise<UpcomingBillsData> {
 
 // ─── Create Budget API ───
 
+// ─── Goal API ───
+
+export interface GoalData {
+  id: string;
+  name: string;
+  target_amount: number;
+  saved_so_far: number;
+  deadline: string | null;
+  budget_percent: number;
+  status: string;
+  created_at: string;
+}
+
+export async function createGoal(
+  name: string,
+  targetAmount: number,
+  deadline?: string,
+  savedSoFar?: number,
+  budgetPercent?: number
+): Promise<GoalData> {
+  return apiFetch<GoalData>('/v1/goals', {
+    method: 'POST',
+    body: JSON.stringify({
+      user_id: DEFAULT_USER_ID,
+      name,
+      target_amount: targetAmount,
+      deadline: deadline || null,
+      saved_so_far: savedSoFar || 0,
+      budget_percent: budgetPercent || 10,
+    }),
+  });
+}
+
+export async function fetchGoals(): Promise<GoalData[]> {
+  const data = await apiFetch<{ goals: GoalData[] }>(
+    `/v1/goals?user_id=${DEFAULT_USER_ID}`
+  );
+  return data.goals;
+}
+
+// ─── Budget Generation API ───
+
+export async function generateBudgets(apply: boolean = true): Promise<{
+  budgets: Array<{ category: string; limit_amount: number; frequency: string; reasoning: string }>;
+  applied: boolean;
+}> {
+  return apiFetch('/v1/budgets/generate', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: DEFAULT_USER_ID, apply }),
+  });
+}
+
+// ─── Create Budget API ───
+
 export async function createBudget(
   category: string,
   limitAmount: number,
