@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Colors, Shadows } from '@/constants/Theme';
 
@@ -36,7 +36,8 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          headerTitle: "Scotty's Home",
+          headerTitle: "SCOTTY'S HOME",
+          headerTitleAlign: 'left',
           tabBarIcon: ({ focused }) => <TabBarIcon name="home" focused={focused} />,
         }}
       />
@@ -52,7 +53,8 @@ export default function TabLayout() {
         name="chat"
         options={{
           title: 'Chat',
-          headerTitle: 'Chat with Scotty',
+          headerTitle: 'CHAT WITH SCOTTY',
+          headerTitleAlign: 'left',
           tabBarIcon: ({ focused }) => <TabBarIcon name="chat" focused={focused} />,
           tabBarBadge: '',
           tabBarBadgeStyle: styles.chatBadge,
@@ -96,9 +98,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   headerTitle: {
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontSize: 18,
-    fontWeight: '900',
+    fontWeight: 'bold',
+    letterSpacing: 1,
     color: Colors.ink,
   },
   badgeButton: {
