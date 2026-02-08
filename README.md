@@ -1,4 +1,10 @@
-# Scotty Market
+# Scotty Market - WINNER OF TARTANHACKS 2026 - Visa Track
+
+**Developers:**
+- https://www.linkedin.com/in/cs-andrew-chang/
+- https://www.linkedin.com/in/sanjaybaskaran/
+- https://www.linkedin.com/in/arjun-chavan-3389b024b/
+- https://www.linkedin.com/in/cody-lejang/
 
 A gamified financial ecosystem where users nurture a dynamic virtual pet, Scotty the Terrier, by maintaining budget goals to unlock personalized AI achievements and earn credits for interactive care, visually reflecting their fiscal health through Scotty's growth, mood, and stamina.
 
